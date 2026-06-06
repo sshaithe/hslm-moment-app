@@ -1,4 +1,5 @@
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
@@ -40,6 +41,11 @@ const s3Client = new S3Client({
   responseChecksumValidation: 'WHEN_REQUIRED',
 });
 
+// Initialize Supabase client
+const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 export default async function handler(req: any, res: any) {
   // CORS configuration to allow cross-origin requests
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -56,10 +62,27 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { filename } = req.body;
+    const { filename, adminPassword } = req.body;
 
     if (!filename) {
       return res.status(400).json({ error: 'Missing filename' });
+    }
+
+    // ─── AUTHENTICATION CHECK ───
+    const { data, error: dbError } = await supabase
+      .from('weddings')
+      .select('admin_password_hash')
+      .eq('id', 'wedding-demo-001')
+      .single();
+
+    if (dbError || !data) {
+      console.error('Database error fetching wedding admin password:', dbError);
+      return res.status(500).json({ error: 'Failed to authorize delete operation' });
+    }
+
+    const savedHash = data.admin_password_hash || '';
+    if (adminPassword !== savedHash) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid password' });
     }
 
     const command = new DeleteObjectCommand({

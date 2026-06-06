@@ -167,6 +167,18 @@ export function setAdminAuthenticated(value: boolean): void {
   localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, value ? 'true' : 'false');
 }
 
+export function getAdminPassword(): string | null {
+  return localStorage.getItem('vv_admin_password');
+}
+
+export function setAdminPassword(password: string): void {
+  localStorage.setItem('vv_admin_password', password);
+}
+
+export function clearAdminPassword(): void {
+  localStorage.removeItem('vv_admin_password');
+}
+
 // ─── Language ───
 export function getStoredLanguage(): Language {
   const saved = localStorage.getItem(STORAGE_KEYS.LANGUAGE) as Language | null;

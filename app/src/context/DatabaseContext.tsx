@@ -446,12 +446,13 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
           const pathName = decodeURIComponent(urlObj.pathname);
           const filename = pathName.startsWith('/') ? pathName.substring(1) : pathName;
           
+          const adminPassword = localStore.getAdminPassword() || '';
           await fetch('/api/delete-file', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ filename }),
+            body: JSON.stringify({ filename, adminPassword }),
           });
         } catch (err) {
           console.error('Failed to delete media file from storage:', err);
@@ -572,6 +573,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
 
     if (success) {
       localStore.setAdminAuthenticated(true);
+      localStore.setAdminPassword(password);
       setIsAdmin(true);
     }
     return success;
@@ -579,6 +581,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
 
   const logoutAsAdmin = () => {
     localStore.setAdminAuthenticated(false);
+    localStore.clearAdminPassword();
     setIsAdmin(false);
   };
 
