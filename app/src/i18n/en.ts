@@ -73,6 +73,7 @@ export const en = {
   password: 'Password',
   enterDashboard: 'Enter Dashboard',
   adminNote: 'This area is restricted to the couple and event organizers.',
+  invalidPassword: 'Invalid password. Please try again.',
   dashboard: 'Dashboard',
   uploadsManagement: 'Uploads Management',
   gallery: 'Gallery',

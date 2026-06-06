@@ -17,8 +17,8 @@ export default function AdminLoginScreen() {
   const { toasts, addToast, removeToast } = useToast();
 
   const handleLogin = async () => {
-    // If Supabase authentication or standard admin123 fallback succeeds
-    const success = await loginAsAdmin(password) || password === 'admin123';
+    // If Supabase authentication succeeds
+    const success = await loginAsAdmin(password);
     if (success) {
       addToast(t('loginSuccess'), 'success');
       navigate('/admin/dashboard');
@@ -74,7 +74,7 @@ export default function AdminLoginScreen() {
           </div>
 
           {error && (
-            <p className="text-xs text-red-500">Invalid password. Try &ldquo;admin123&rdquo;</p>
+            <p className="text-xs text-red-500">{t('invalidPassword')}</p>
           )}
 
           <button

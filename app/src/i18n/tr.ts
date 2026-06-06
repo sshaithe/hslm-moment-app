@@ -69,6 +69,7 @@ export const tr = {
   password: 'Şifre',
   enterDashboard: 'Panele Gir',
   adminNote: 'Bu alan çiftlere ve etkinlik organizatörlerine özeldir.',
+  invalidPassword: 'Geçersiz şifre. Lütfen tekrar deneyin.',
   dashboard: 'Panel',
   uploadsManagement: 'Yükleme Yönetimi',
   gallery: 'Galeri',
