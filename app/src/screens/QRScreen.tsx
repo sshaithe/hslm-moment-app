@@ -33,22 +33,74 @@ export default function QRScreen() {
       canvas.width = 600;
       canvas.height = 800;
       if (ctx) {
+        // Background color
         ctx.fillStyle = '#FAF8F4';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 150, 300, 300, 300);
 
-        ctx.fillStyle = '#2C2418';
-        ctx.font = 'italic 28px Playfair Display';
-        ctx.textAlign = 'center';
-        ctx.fillText(wedding.couple_name, canvas.width / 2, 250);
+        // Draw the QR code image in the middle
+        ctx.drawImage(img, 175, 300, 250, 250);
 
-        ctx.font = '14px DM Sans';
-        ctx.fillStyle = '#8A7D6B';
-        ctx.fillText(new Date(wedding.wedding_date).toLocaleDateString(), canvas.width / 2, 280);
+        // Gold top and bottom borders
+        const goldGrad = ctx.createLinearGradient(0, 0, canvas.width, 0);
+        goldGrad.addColorStop(0, '#B8975A');
+        goldGrad.addColorStop(0.5, '#D4AF37');
+        goldGrad.addColorStop(1, '#B8975A');
+        
+        ctx.fillStyle = goldGrad;
+        ctx.fillRect(0, 0, canvas.width, 12);
+        ctx.fillRect(0, canvas.height - 12, canvas.width, 12);
 
+        // Corner ornaments
+        ctx.strokeStyle = 'rgba(184, 151, 90, 0.4)';
+        ctx.lineWidth = 3;
+        // Top-left
+        ctx.beginPath(); ctx.moveTo(30, 60); ctx.lineTo(30, 30); ctx.lineTo(60, 30); ctx.stroke();
+        // Top-right
+        ctx.beginPath(); ctx.moveTo(570, 60); ctx.lineTo(570, 30); ctx.lineTo(540, 30); ctx.stroke();
+        // Bottom-left
+        ctx.beginPath(); ctx.moveTo(30, 740); ctx.lineTo(30, 770); ctx.lineTo(60, 770); ctx.stroke();
+        // Bottom-right
+        ctx.beginPath(); ctx.moveTo(570, 740); ctx.lineTo(570, 770); ctx.lineTo(540, 770); ctx.stroke();
+
+        // "YOU ARE INVITED" text
         ctx.fillStyle = '#B8975A';
-        ctx.font = '12px DM Sans';
-        ctx.fillText(t('scanToShare'), canvas.width / 2, 640);
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(t('youAreInvited').toUpperCase(), canvas.width / 2, 110);
+
+        // Couple Name
+        ctx.fillStyle = '#2C2418';
+        ctx.font = 'italic 40px Georgia';
+        ctx.fillText(wedding.couple_name, canvas.width / 2, 180);
+
+        // Date
+        ctx.fillStyle = '#8A7D6B';
+        ctx.font = '18px sans-serif';
+        const dateStr = new Date(wedding.wedding_date).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+        ctx.fillText(dateStr, canvas.width / 2, 220);
+
+        // Venue
+        ctx.fillStyle = 'rgba(138, 125, 107, 0.7)';
+        ctx.font = '15px sans-serif';
+        ctx.fillText(wedding.venue, canvas.width / 2, 255);
+
+        // Bottom texts
+        ctx.fillStyle = '#2C2418';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText(t('scanToShare'), canvas.width / 2, 600);
+
+        ctx.fillStyle = '#8A7D6B';
+        ctx.font = '15px sans-serif';
+        ctx.fillText(t('uploadDescription'), canvas.width / 2, 635);
+
+        // HSLM Moment Brand
+        ctx.fillStyle = '#B8975A';
+        ctx.font = 'bold 15px sans-serif';
+        ctx.fillText('HSLM MOMENT', canvas.width / 2, 720);
 
         const link = document.createElement('a');
         link.download = `vowvault-qr-${wedding.slug}.png`;
@@ -108,9 +160,9 @@ export default function QRScreen() {
 
         <div className="flex items-center justify-center gap-1.5 text-gold">
           <div className="w-4 h-4 rounded-full border border-gold flex items-center justify-center">
-            <span className="text-[8px] font-bold">V</span>
+            <span className="text-[8px] font-bold">H</span>
           </div>
-          <span className="text-[10px] font-medium tracking-wider">VOWVAULT</span>
+          <span className="text-[10px] font-medium tracking-wider">HSLM MOMENT</span>
         </div>
       </div>
 
