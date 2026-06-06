@@ -20,6 +20,7 @@ export interface Wedding {
   hero_photo?: string;      // base64 or URL for the landing page hero background
   couple_photo?: string;    // base64 or URL for the couple portrait on the landing page
   gallery_banner?: string;  // base64 or URL for the gallery screen header
+  thank_you_quote?: string; // custom thank you/welcome quote shown on the landing page
 }
 
 export interface Guest {

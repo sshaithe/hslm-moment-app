@@ -87,7 +87,7 @@ export default function LandingScreen() {
       <div className="flex-1 bg-ivory -mt-6 rounded-t-3xl relative z-10 px-5 pt-8 pb-4">
         {/* Quote */}
         <p className="font-heading italic text-center text-muted-warm text-base leading-relaxed mb-8 px-4">
-          &ldquo;{t('thankYouQuote')}&rdquo;
+          &ldquo;{wedding.thank_you_quote || t('thankYouQuote')}&rdquo;
         </p>
 
         {/* Stats */}

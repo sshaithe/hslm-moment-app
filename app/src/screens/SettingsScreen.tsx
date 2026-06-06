@@ -220,6 +220,9 @@ export default function SettingsScreen() {
       {/* Photo Customization */}
       <PhotoCustomizationSection language={language} onSaved={() => addToast(t('settingsSaved'), 'success')} />
 
+      {/* Welcome Message Customization */}
+      <TextCustomizationSection language={language} onSaved={() => addToast(t('settingsSaved'), 'success')} />
+
       {/* Save */}
       <button
         onClick={handleSave}
@@ -422,3 +425,82 @@ function PhotoUploadRow({
     </div>
   );
 }
+
+// ─── Text Customization Section ─────────────────────────────────────────────
+function TextCustomizationSection({
+  language,
+  onSaved,
+}: {
+  language: string;
+  onSaved: () => void;
+}) {
+  const [, setRefreshKey] = useState(0);
+  const w = getWedding();
+  const [quote, setQuote] = useState(w.thank_you_quote || '');
+
+  const handleSaveQuote = () => {
+    const wedding = getWedding();
+    if (quote.trim()) {
+      wedding.thank_you_quote = quote.trim();
+    } else {
+      delete wedding.thank_you_quote;
+    }
+    saveWedding(wedding);
+    setRefreshKey((k) => k + 1);
+    onSaved();
+  };
+
+  const handleResetQuote = () => {
+    const wedding = getWedding();
+    delete wedding.thank_you_quote;
+    saveWedding(wedding);
+    setQuote('');
+    setRefreshKey((k) => k + 1);
+    onSaved();
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-card overflow-hidden">
+      <div className="p-4 border-b border-accent-border/20">
+        <h3 className="font-medium text-charcoal text-sm flex items-center gap-2">
+          <MessageSquare size={15} className="text-gold" />
+          {language === 'tr' ? 'Karşılama Mesajı Özelleştirme' : 'Welcome Message Customization'}
+        </h3>
+        <p className="text-xs text-muted-warm mt-0.5">
+          {language === 'tr'
+            ? 'Ana sayfadaki karşılama veya teşekkür sözünü düzenleyin'
+            : 'Edit the welcome or thank you quote shown on the landing page'}
+        </p>
+      </div>
+      <div className="p-4 space-y-3">
+        <textarea
+          value={quote}
+          onChange={(e) => setQuote(e.target.value)}
+          placeholder={
+            language === 'tr'
+              ? 'Örn: En güzel günümüzün bir parçası olduğunuz için teşekkür ederiz...'
+              : 'E.g., Thank you for being part of our most beautiful day...'
+          }
+          className="w-full min-h-[80px] p-3 rounded-lg border border-accent-border/40 focus:border-gold focus:outline-none text-xs text-charcoal bg-ivory/10 resize-y"
+        />
+        <div className="flex items-center justify-end gap-2">
+          {w.thank_you_quote && (
+            <button
+              onClick={handleResetQuote}
+              className="px-3 py-1.5 rounded-full bg-red-50 text-red-400 text-xs font-medium hover:bg-red-100 transition-colors"
+            >
+              {language === 'tr' ? 'Varsayılana Sıfırla' : 'Reset to Default'}
+            </button>
+          )}
+          <button
+            onClick={handleSaveQuote}
+            className="px-3 py-1.5 rounded-full bg-gold text-white text-xs font-medium hover:opacity-90 transition-opacity"
+          >
+            {language === 'tr' ? 'Metni Güncelle' : 'Update Message'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
