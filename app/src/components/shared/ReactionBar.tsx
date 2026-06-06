@@ -1,7 +1,6 @@
 import { Heart, Laugh, Zap } from 'lucide-react';
-import { getReactionCounts, hasReacted, addReaction, removeReaction } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import type { Reaction } from '@/lib/types';
-import { v4 as uuidv4 } from 'uuid';
 
 interface ReactionBarProps {
   uploadId: string;
@@ -11,21 +10,11 @@ interface ReactionBarProps {
 }
 
 export default function ReactionBar({ uploadId, guestId, onReact, compact = false }: ReactionBarProps) {
+  const { getReactionCounts, hasReacted, toggleReaction } = useDatabase();
   const counts = getReactionCounts(uploadId);
 
-  const handleReact = (type: Reaction['type']) => {
-    if (hasReacted(uploadId, guestId, type)) {
-      removeReaction(uploadId, guestId, type);
-    } else {
-      const reaction: Reaction = {
-        id: uuidv4(),
-        upload_id: uploadId,
-        guest_id: guestId,
-        type,
-        created_at: new Date().toISOString(),
-      };
-      addReaction(reaction);
-    }
+  const handleReact = async (type: Reaction['type']) => {
+    await toggleReaction(uploadId, guestId, type);
     onReact?.();
   };
 

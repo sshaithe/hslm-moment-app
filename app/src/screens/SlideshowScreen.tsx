@@ -1,20 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Play, Pause, X } from 'lucide-react';
-import { getWedding, getUploads } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import Logo from '@/components/shared/Logo';
 import { useLanguage } from '@/i18n/LanguageContext';
 
 export default function SlideshowScreen() {
   const navigate = useNavigate();
-  const wedding = getWedding();
+  const { wedding, uploads: allUploads } = useDatabase();
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const [fadeKey, setFadeKey] = useState(0);
-
-  const allUploads = getUploads();
   const visibleUploads = allUploads.filter((u) => {
     if (u.is_hidden) return false;
     if (u.type === 'message') return false;

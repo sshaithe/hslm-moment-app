@@ -1,18 +1,13 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, QrCode, Monitor, Pause, Play, Image, MessageSquare, Users, Clock, EyeOff, CheckCircle, Star } from 'lucide-react';
-import { getWedding, getUploads, getGuests, updateUpload } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { Upload } from '@/lib/types';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const wedding = getWedding();
+  const { wedding, uploads, guests, saveWeddingSettings, modifyUpload, removeUpload } = useDatabase();
   const { t } = useLanguage();
-  const [, setRefreshKey] = useState(0);
-
-  const uploads = getUploads();
-  const guests = getGuests();
 
   const stats = [
     { label: t('totalUploadsStat'), value: uploads.length, icon: Image, color: 'bg-gold/10 text-gold' },
@@ -29,10 +24,7 @@ export default function AdminDashboard() {
       label: wedding.uploads_paused ? t('resumeUploads') : t('pauseUploads'),
       icon: wedding.uploads_paused ? Play : Pause,
       action: () => {
-        const w = getWedding();
-        w.uploads_paused = !w.uploads_paused;
-        localStorage.setItem('vv_wedding', JSON.stringify(w));
-        setRefreshKey((k) => k + 1);
+        saveWeddingSettings({ uploads_paused: !wedding.uploads_paused });
       },
     },
   ];
@@ -42,23 +34,21 @@ export default function AdminDashboard() {
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 8);
 
-  const handleAction = (upload: Upload, action: string) => {
+  const handleAction = async (upload: Upload, action: string) => {
     switch (action) {
       case 'hide':
-        updateUpload(upload.id, { is_hidden: true });
+        await modifyUpload(upload.id, { is_hidden: true });
         break;
       case 'approve':
-        updateUpload(upload.id, { is_approved: true });
+        await modifyUpload(upload.id, { is_approved: true });
         break;
       case 'feature':
-        updateUpload(upload.id, { is_featured: true });
+        await modifyUpload(upload.id, { is_featured: true });
         break;
       case 'delete':
-        const all = uploads.filter((u) => u.id !== upload.id);
-        localStorage.setItem('vv_uploads', JSON.stringify(all));
+        await removeUpload(upload.id);
         break;
     }
-    setRefreshKey((k) => k + 1);
   };
 
   const getStatusBadge = (upload: Upload) => {
@@ -119,10 +109,7 @@ export default function AdminDashboard() {
                 <span className="text-sm text-charcoal">{toggle.label}</span>
                 <button
                   onClick={() => {
-                    const w = getWedding();
-                    (w[key] as boolean) = !value;
-                    localStorage.setItem('vv_wedding', JSON.stringify(w));
-                    setRefreshKey((k) => k + 1);
+                    saveWeddingSettings({ [key]: !value });
                   }}
                   className={`w-11 h-6 rounded-full transition-colors relative ${value ? 'bg-gold' : 'bg-accent-border'}`}
                 >

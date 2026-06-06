@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, PenLine, Video, Quote } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { getWedding, getUploads, getGuestSession, addUpload, getReactions } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import GoldDivider from '@/components/shared/GoldDivider';
 import type { Upload } from '@/lib/types';
@@ -10,24 +10,20 @@ import EmojiPicker from '@/components/shared/EmojiPicker';
 
 export default function MessageWallScreen() {
   const navigate = useNavigate();
-  const wedding = getWedding();
-  const guest = getGuestSession();
+  const { wedding, currentGuest: guest, uploads, createUpload, reactions } = useDatabase();
   const { t, language } = useLanguage();
   const [showComposer, setShowComposer] = useState(false);
   const [messageText, setMessageText] = useState('');
-  const [, setRefreshKey] = useState(0);
 
-  const uploads = getUploads();
   const messages = uploads.filter((u) => u.type === 'message' && !u.is_hidden && (!wedding.approve_before_display || u.is_approved));
-  const reactions = getReactions();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!messageText.trim()) return;
 
     const guestName = guest ? `${guest.first_name} ${guest.last_name}` : 'Anonymous';
     const guestId = guest?.guest_id || 'anonymous';
 
-    addUpload({
+    await createUpload({
       id: uuidv4(),
       wedding_id: wedding.id,
       guest_id: guestId,
@@ -38,12 +34,10 @@ export default function MessageWallScreen() {
       is_hidden: false,
       is_featured: false,
       report_count: 0,
-      created_at: new Date().toISOString(),
     });
 
     setMessageText('');
     setShowComposer(false);
-    setRefreshKey((k) => k + 1);
   };
 
   return (

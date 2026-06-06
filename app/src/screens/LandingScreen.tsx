@@ -1,14 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { Calendar, MapPin, Image, Users, Mail, Video, Lock } from 'lucide-react';
-import { getWedding, getUploads, getGuests } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import GoldDivider from '@/components/shared/GoldDivider';
 
 export default function LandingScreen() {
   const navigate = useNavigate();
-  const wedding = getWedding();
-  const uploads = getUploads();
-  const guests = getGuests();
+  const { wedding, uploads, guests } = useDatabase();
   const { t, language } = useLanguage();
 
   const stats = [

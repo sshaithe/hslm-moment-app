@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, ArrowLeft } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
-import { getWedding, addGuest, setGuestSession } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
-import type { Guest } from '@/lib/types';
 
 export default function JoinScreen() {
   const navigate = useNavigate();
-  const wedding = getWedding();
+  const { wedding, registerGuest } = useDatabase();
   const { t } = useLanguage();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -18,7 +16,7 @@ export default function JoinScreen() {
 
   const isValid = firstName.trim() && lastName.trim() && consent;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const newErrors: Record<string, boolean> = {};
     if (!firstName.trim()) newErrors.firstName = true;
     if (!lastName.trim()) newErrors.lastName = true;
@@ -29,24 +27,7 @@ export default function JoinScreen() {
       return;
     }
 
-    const guest: Guest = {
-      id: uuidv4(),
-      wedding_id: wedding.id,
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      table_number: tableNumber.trim() || undefined,
-      joined_at: new Date().toISOString(),
-      last_seen_at: new Date().toISOString(),
-    };
-
-    addGuest(guest);
-    setGuestSession({
-      guest_id: guest.id,
-      first_name: guest.first_name,
-      last_name: guest.last_name,
-      wedding_id: wedding.id,
-    });
-
+    await registerGuest(firstName.trim(), lastName.trim(), tableNumber.trim());
     navigate('/');
   };
 

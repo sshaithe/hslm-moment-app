@@ -1,13 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Mail } from 'lucide-react';
-import { getWedding, getUploads, getReactions } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { GalleryTab, Upload } from '@/lib/types';
 
 export default function GalleryScreen() {
   const navigate = useNavigate();
-  const wedding = getWedding();
+  const { wedding, uploads, reactions } = useDatabase();
   const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<GalleryTab>('all');
 
@@ -18,9 +18,6 @@ export default function GalleryScreen() {
     { key: 'messages', label: t('messagesTab') },
     { key: 'popular', label: t('popular') },
   ];
-
-  const uploads = getUploads();
-  const reactions = getReactions();
 
   const filteredUploads = useMemo(() => {
     // Exclude uploads with stale blob: URLs that expired after page refresh

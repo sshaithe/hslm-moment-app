@@ -1,13 +1,13 @@
 import { useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Download, Copy } from 'lucide-react';
-import { getWedding } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useToast } from '@/hooks/useToast';
 import ToastContainer from '@/components/shared/Toast';
 
 export default function QRScreen() {
-  const wedding = getWedding();
+  const { wedding } = useDatabase();
   const { t, language } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
   const posterRef = useRef<HTMLDivElement>(null);

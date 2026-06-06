@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, Film, MessageSquare, X, UploadCloud, Shield, ArrowLeft } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { getWedding, getGuestSession, addUpload } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { UploadType } from '@/lib/types';
 import Sparkle from '@/components/shared/Sparkle';
@@ -12,8 +12,7 @@ import EmojiPicker from '@/components/shared/EmojiPicker';
 
 export default function UploadScreen() {
   const navigate = useNavigate();
-  const wedding = getWedding();
-  const guest = getGuestSession();
+  const { wedding, currentGuest: guest, createUpload } = useDatabase();
   const { t } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
   const [uploadType, setUploadType] = useState<UploadType>('photo');
@@ -52,7 +51,7 @@ export default function UploadScreen() {
     setPreview(dataUrl);
   }, []);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!guest && wedding.require_guest_name) {
       navigate('/join');
       return;
@@ -74,10 +73,9 @@ export default function UploadScreen() {
       is_hidden: false,
       is_featured: false,
       report_count: 0,
-      created_at: new Date().toISOString(),
     };
 
-    addUpload(upload);
+    await createUpload(upload);
     setShowSuccess(true);
     addToast(t('uploadSuccessToast'), 'success');
 

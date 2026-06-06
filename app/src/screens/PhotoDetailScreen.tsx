@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { X, Download, Flag, Send } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
-import { getWedding, getUploads, getGuestSession, getCommentsForUpload, addComment, updateUpload } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import ReactionBar from '@/components/shared/ReactionBar';
 import { useToast } from '@/hooks/useToast';
@@ -12,15 +11,12 @@ import EmojiPicker from '@/components/shared/EmojiPicker';
 export default function PhotoDetailScreen() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const wedding = getWedding();
-  const guest = getGuestSession();
+  const { wedding, currentGuest: guest, uploads, comments: allComments, submitComment, modifyUpload } = useDatabase();
   const { t, language } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
   const [commentText, setCommentText] = useState('');
-  const [, setRefreshKey] = useState(0);
   const [showReportConfirm, setShowReportConfirm] = useState(false);
 
-  const uploads = getUploads();
   const upload = uploads.find((u) => u.id === id);
 
   if (!upload) {
@@ -31,34 +27,27 @@ export default function PhotoDetailScreen() {
     );
   }
 
-  const comments = getCommentsForUpload(upload.id);
+  const comments = allComments.filter((c) => c.upload_id === upload.id);
   const guestId = guest?.guest_id || 'anonymous';
 
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!commentText.trim()) return;
     if (!wedding.allow_comments) {
       addToast(t('commentsDisabled'), 'error');
       return;
     }
 
-    addComment({
-      id: uuidv4(),
-      upload_id: upload.id,
-      guest_id: guestId,
-      guest_name: guest ? `${guest.first_name} ${guest.last_name}` : 'Anonymous',
-      text: commentText.trim(),
-      created_at: new Date().toISOString(),
-    });
+    const guestName = guest ? `${guest.first_name} ${guest.last_name}` : 'Anonymous';
+    await submitComment(upload.id, guestId, guestName, commentText.trim());
     setCommentText('');
-    setRefreshKey((k) => k + 1);
   };
 
-  const handleReport = () => {
+  const handleReport = async () => {
     const newCount = (upload.report_count || 0) + 1;
-    updateUpload(upload.id, { report_count: newCount });
+    await modifyUpload(upload.id, { report_count: newCount });
 
     if (wedding.auto_hide_reported && newCount >= 3) {
-      updateUpload(upload.id, { is_hidden: true });
+      await modifyUpload(upload.id, { is_hidden: true });
     }
 
     addToast(t('actionSuccess'), 'success');
@@ -142,7 +131,7 @@ export default function PhotoDetailScreen() {
 
         {/* Reactions */}
         <div className="mb-6">
-          <ReactionBar uploadId={upload.id} guestId={guestId} onReact={() => setRefreshKey((k) => k + 1)} />
+          <ReactionBar uploadId={upload.id} guestId={guestId} />
         </div>
 
         {/* Comments */}

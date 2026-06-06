@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, EyeOff, Trash2, CheckCircle, Star, MessageSquare, Filter } from 'lucide-react';
-import { getUploads, updateUpload } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { TranslationKey } from '@/i18n/LanguageContext';
 import type { Upload } from '@/lib/types';
@@ -10,13 +10,11 @@ type TypeFilter = 'all' | 'photo' | 'video' | 'message';
 
 export default function UploadsManagementScreen() {
   const { t } = useLanguage();
+  const { uploads, modifyUpload, removeUpload } = useDatabase();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [, setRefreshKey] = useState(0);
-
-  const uploads = getUploads();
 
   const filteredUploads = uploads.filter((u) => {
     if (search && !u.guest_name.toLowerCase().includes(search.toLowerCase()) && !u.caption?.toLowerCase().includes(search.toLowerCase())) return false;
@@ -46,28 +44,24 @@ export default function UploadsManagementScreen() {
     }
   };
 
-  const bulkAction = (action: string) => {
-    selectedIds.forEach((id) => {
+  const bulkAction = async (action: string) => {
+    for (const id of selectedIds) {
       switch (action) {
         case 'hide':
-          updateUpload(id, { is_hidden: true });
+          await modifyUpload(id, { is_hidden: true });
           break;
         case 'delete':
-          {
-            const all = uploads.filter((u) => u.id !== id);
-            localStorage.setItem('vv_uploads', JSON.stringify(all));
-          }
+          await removeUpload(id);
           break;
         case 'approve':
-          updateUpload(id, { is_approved: true });
+          await modifyUpload(id, { is_approved: true });
           break;
         case 'feature':
-          updateUpload(id, { is_featured: true });
+          await modifyUpload(id, { is_featured: true });
           break;
       }
-    });
+    }
     setSelectedIds(new Set());
-    setRefreshKey((k) => k + 1);
   };
 
   const getStatusBadge = (upload: Upload) => {
@@ -203,14 +197,14 @@ export default function UploadsManagementScreen() {
                   <td className="p-3">
                     <div className="flex items-center gap-1">
                       {!upload.is_approved && (
-                        <button onClick={() => { updateUpload(upload.id, { is_approved: true }); setRefreshKey((k) => k + 1); }} className="p-1 rounded hover:bg-green-50 text-green-600">
+                        <button onClick={() => { modifyUpload(upload.id, { is_approved: true }); }} className="p-1 rounded hover:bg-green-50 text-green-600">
                           <CheckCircle size={14} />
                         </button>
                       )}
-                      <button onClick={() => { updateUpload(upload.id, { is_hidden: true }); setRefreshKey((k) => k + 1); }} className="p-1 rounded hover:bg-red-50 text-red-400">
+                      <button onClick={() => { modifyUpload(upload.id, { is_hidden: true }); }} className="p-1 rounded hover:bg-red-50 text-red-400">
                         <EyeOff size={14} />
                       </button>
-                      <button onClick={() => { updateUpload(upload.id, { is_featured: true }); setRefreshKey((k) => k + 1); }} className="p-1 rounded hover:bg-gold/10 text-gold">
+                      <button onClick={() => { modifyUpload(upload.id, { is_featured: true }); }} className="p-1 rounded hover:bg-gold/10 text-gold">
                         <Star size={14} />
                       </button>
                     </div>

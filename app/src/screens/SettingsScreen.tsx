@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Shield, Globe, MessageSquare, Image, Video, Download, Flag, Pause, Users, EyeOff, Upload, Trash2 } from 'lucide-react';
-import { getWedding, saveWedding } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useToast } from '@/hooks/useToast';
 import ToastContainer from '@/components/shared/Toast';
+import type { Wedding } from '@/lib/types';
 
 interface SettingItem {
   key: string;
@@ -15,10 +16,9 @@ interface SettingItem {
 }
 
 export default function SettingsScreen() {
-  const wedding = getWedding();
+  const { wedding, saveWeddingSettings } = useDatabase();
   const { t, language, setLanguage } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
-  const [, setRefreshKey] = useState(0);
 
   const allSettings: SettingItem[] = [
     {
@@ -107,7 +107,7 @@ export default function SettingsScreen() {
   const contentSettings = allSettings.filter((s) => s.category === 'content');
 
   const handleToggle = (key: string, value: boolean) => {
-    const w = { ...getWedding() };
+    const w = { ...wedding };
 
     switch (key) {
       case 'is_public':
@@ -142,8 +142,7 @@ export default function SettingsScreen() {
         break;
     }
 
-    saveWedding(w);
-    setRefreshKey((k) => k + 1);
+    saveWeddingSettings(w);
   };
 
   const handleSave = () => {
@@ -218,10 +217,20 @@ export default function SettingsScreen() {
       </div>
 
       {/* Photo Customization */}
-      <PhotoCustomizationSection language={language} onSaved={() => addToast(t('settingsSaved'), 'success')} />
+      <PhotoCustomizationSection
+        language={language}
+        onSaved={() => addToast(t('settingsSaved'), 'success')}
+        wedding={wedding}
+        saveWeddingSettings={saveWeddingSettings}
+      />
 
       {/* Welcome Message Customization */}
-      <TextCustomizationSection language={language} onSaved={() => addToast(t('settingsSaved'), 'success')} />
+      <TextCustomizationSection
+        language={language}
+        onSaved={() => addToast(t('settingsSaved'), 'success')}
+        wedding={wedding}
+        saveWeddingSettings={saveWeddingSettings}
+      />
 
       {/* Save */}
       <button
@@ -273,30 +282,27 @@ function SettingRow({
 function PhotoCustomizationSection({
   language,
   onSaved,
+  wedding,
+  saveWeddingSettings,
 }: {
   language: string;
   onSaved: () => void;
+  wedding: Wedding;
+  saveWeddingSettings: (updates: Partial<Wedding>) => Promise<void>;
 }) {
-  const [, setRefreshKey] = useState(0);
-  const w = getWedding();
+  const w = wedding;
 
   const handlePhotoChange = (field: 'hero_photo' | 'couple_photo' | 'gallery_banner', file: File) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const wedding = getWedding();
-      wedding[field] = reader.result as string;
-      saveWedding(wedding);
-      setRefreshKey((k) => k + 1);
+    reader.onload = async () => {
+      await saveWeddingSettings({ [field]: reader.result as string });
       onSaved();
     };
     reader.readAsDataURL(file);
   };
 
-  const handlePhotoRemove = (field: 'hero_photo' | 'couple_photo' | 'gallery_banner') => {
-    const wedding = getWedding();
-    delete wedding[field];
-    saveWedding(wedding);
-    setRefreshKey((k) => k + 1);
+  const handlePhotoRemove = async (field: 'hero_photo' | 'couple_photo' | 'gallery_banner') => {
+    await saveWeddingSettings({ [field]: '' });
     onSaved();
   };
 
@@ -430,32 +436,30 @@ function PhotoUploadRow({
 function TextCustomizationSection({
   language,
   onSaved,
+  wedding,
+  saveWeddingSettings,
 }: {
   language: string;
   onSaved: () => void;
+  wedding: Wedding;
+  saveWeddingSettings: (updates: Partial<Wedding>) => Promise<void>;
 }) {
-  const [, setRefreshKey] = useState(0);
-  const w = getWedding();
+  const w = wedding;
   const [quote, setQuote] = useState(w.thank_you_quote || '');
 
-  const handleSaveQuote = () => {
-    const wedding = getWedding();
-    if (quote.trim()) {
-      wedding.thank_you_quote = quote.trim();
-    } else {
-      delete wedding.thank_you_quote;
-    }
-    saveWedding(wedding);
-    setRefreshKey((k) => k + 1);
+  // Keep state in sync if wedding changes
+  useEffect(() => {
+    setQuote(w.thank_you_quote || '');
+  }, [w.thank_you_quote]);
+
+  const handleSaveQuote = async () => {
+    await saveWeddingSettings({ thank_you_quote: quote.trim() || undefined });
     onSaved();
   };
 
-  const handleResetQuote = () => {
-    const wedding = getWedding();
-    delete wedding.thank_you_quote;
-    saveWedding(wedding);
+  const handleResetQuote = async () => {
+    await saveWeddingSettings({ thank_you_quote: undefined });
     setQuote('');
-    setRefreshKey((k) => k + 1);
     onSaved();
   };
 

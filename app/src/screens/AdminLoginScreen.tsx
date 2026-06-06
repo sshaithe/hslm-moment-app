@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { setAdminAuthenticated } from '@/lib/localStore';
+import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import Logo from '@/components/shared/Logo';
 import { useToast } from '@/hooks/useToast';
@@ -9,15 +9,17 @@ import ToastContainer from '@/components/shared/Toast';
 
 export default function AdminLoginScreen() {
   const navigate = useNavigate();
+  const { loginAsAdmin } = useDatabase();
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(false);
   const { t } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
 
-  const handleLogin = () => {
-    if (password === 'admin123') {
-      setAdminAuthenticated(true);
+  const handleLogin = async () => {
+    // If Supabase authentication or standard admin123 fallback succeeds
+    const success = await loginAsAdmin(password) || password === 'admin123';
+    if (success) {
       addToast(t('loginSuccess'), 'success');
       navigate('/admin/dashboard');
     } else {
