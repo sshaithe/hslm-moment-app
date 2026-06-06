@@ -53,7 +53,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
 
   const isSupabase = isSupabaseConfigured;
 
-  // ─── UTILITY: Upload base64 or file to Supabase Storage ───
+  // ─── UTILITY: Upload base64 or file to Cloudflare R2 ───
   const uploadMedia = async (fileOrBase64: string, fileName: string): Promise<string> => {
     let blob: Blob;
     let mimeType = 'image/jpeg';
@@ -76,20 +76,45 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       mimeType = blob.type;
     }
 
-    const { error } = await supabase!.storage
-      .from('gallery')
-      .upload(fileName, blob, {
-        contentType: mimeType,
-        upsert: true,
+    if (isSupabase) {
+      // 1. Get S3 presigned upload URL from our Vercel API endpoint
+      const response = await fetch('/api/get-upload-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename: fileName,
+          contentType: mimeType,
+        }),
       });
 
-    if (error) throw error;
+      if (!response.ok) {
+        throw new Error(`Failed to get presigned URL: ${response.statusText}`);
+      }
 
-    const { data: publicUrlData } = supabase!.storage
-      .from('gallery')
-      .getPublicUrl(fileName);
+      const { uploadUrl } = await response.json();
 
-    return publicUrlData.publicUrl;
+      // 2. Upload file directly to Cloudflare R2 using the presigned URL
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': mimeType,
+        },
+        body: blob,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Failed to upload to Cloudflare R2: ${uploadResponse.statusText}`);
+      }
+
+      // 3. Return the public URL of the uploaded file on Cloudflare R2
+      const publicUrlBase = import.meta.env.VITE_R2_PUBLIC_URL || '';
+      return `${publicUrlBase.replace(/\/$/, '')}/${fileName}`;
+    }
+
+    // Fallback for local-first testing: return the local blob/base64 URL itself
+    return fileOrBase64;
   };
 
   // ─── INITIAL LOAD (SUPABASE ONLY) ───
