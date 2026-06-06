@@ -5,7 +5,7 @@
 create extension if not exists "uuid-ossp";
 
 -- ─── 1. WEDDING SETTINGS ───
-create table if nulls distinct public.weddings (
+create table if not exists public.weddings (
     id text primary key,
     couple_name text not null,
     bride_name text not null,
@@ -31,7 +31,7 @@ create table if nulls distinct public.weddings (
 );
 
 -- ─── 2. GUESTS ───
-create table if nulls distinct public.guests (
+create table if not exists public.guests (
     id uuid default gen_random_uuid() primary key,
     wedding_id text references public.weddings(id) on delete cascade not null,
     first_name text not null,
@@ -42,7 +42,7 @@ create table if nulls distinct public.guests (
 );
 
 -- ─── 3. UPLOADS ───
-create table if nulls distinct public.uploads (
+create table if not exists public.uploads (
     id uuid default gen_random_uuid() primary key,
     wedding_id text references public.weddings(id) on delete cascade not null,
     guest_id uuid references public.guests(id) on delete set null,
@@ -61,7 +61,7 @@ create table if nulls distinct public.uploads (
 );
 
 -- ─── 4. REACTIONS ───
-create table if nulls distinct public.reactions (
+create table if not exists public.reactions (
     id uuid default gen_random_uuid() primary key,
     upload_id uuid references public.uploads(id) on delete cascade not null,
     guest_id uuid references public.guests(id) on delete cascade not null,
@@ -71,7 +71,7 @@ create table if nulls distinct public.reactions (
 );
 
 -- ─── 5. COMMENTS ───
-create table if nulls distinct public.comments (
+create table if not exists public.comments (
     id uuid default gen_random_uuid() primary key,
     upload_id uuid references public.uploads(id) on delete cascade not null,
     guest_id uuid references public.guests(id) on delete set null,

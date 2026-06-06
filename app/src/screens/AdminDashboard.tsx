@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Download, QrCode, Monitor, Pause, Play, Image, MessageSquare, Users, Clock, EyeOff, CheckCircle, Star } from 'lucide-react';
+import { Download, QrCode, Monitor, Pause, Play, Image, MessageSquare, Users, Clock, EyeOff, CheckCircle, Star, Trash2 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { Upload } from '@/lib/types';
@@ -131,9 +131,9 @@ export default function AdminDashboard() {
             <div key={upload.id} className="flex items-center gap-3 p-4 hover:bg-ivory/50 transition-colors">
               <div className="w-12 h-12 rounded-lg overflow-hidden bg-blush flex-shrink-0">
                 {upload.type === 'video' ? (
-                  <video src={upload.local_url || upload.public_url} className="w-full h-full object-cover" muted playsInline />
+                  <video src={upload.local_url || upload.public_url || undefined} className="w-full h-full object-cover" muted playsInline />
                 ) : upload.type === 'photo' ? (
-                  <img src={upload.local_url || upload.public_url} alt="" className="w-full h-full object-cover" />
+                  <img src={upload.local_url || upload.public_url || undefined} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <MessageSquare size={16} className="text-gold" />
@@ -149,15 +149,26 @@ export default function AdminDashboard() {
               </div>
               <div className="flex items-center gap-1">
                 {!upload.is_approved && (
-                  <button onClick={() => handleAction(upload, 'approve')} className="p-1.5 rounded-lg hover:bg-green-50 text-green-600">
+                  <button onClick={() => handleAction(upload, 'approve')} className="p-1.5 rounded-lg hover:bg-green-50 text-green-600" title={t('approve') || 'Approve'}>
                     <CheckCircle size={16} />
                   </button>
                 )}
-                <button onClick={() => handleAction(upload, 'feature')} className={`p-1.5 rounded-lg hover:bg-gold/10 ${upload.is_featured ? 'text-gold' : 'text-muted-warm'}`}>
+                <button onClick={() => handleAction(upload, 'feature')} className={`p-1.5 rounded-lg hover:bg-gold/10 ${upload.is_featured ? 'text-gold' : 'text-muted-warm'}`} title={t('feature') || 'Feature'}>
                   <Star size={16} />
                 </button>
-                <button onClick={() => handleAction(upload, 'hide')} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-warm hover:text-red-500">
+                <button onClick={() => handleAction(upload, 'hide')} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-warm hover:text-red-500" title={t('hide') || 'Hide'}>
                   <EyeOff size={16} />
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm('Are you sure you want to permanently delete this memory from the app and cloud storage?')) {
+                      handleAction(upload, 'delete');
+                    }
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"
+                  title={t('delete') || 'Delete'}
+                >
+                  <Trash2 size={16} />
                 </button>
               </div>
             </div>

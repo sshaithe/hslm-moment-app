@@ -17,7 +17,7 @@ interface DatabaseContextProps {
   // Actions
   saveWeddingSettings: (updates: Partial<Wedding>) => Promise<void>;
   registerGuest: (firstName: string, lastName: string, tableNumber?: string) => Promise<Guest>;
-  createUpload: (upload: Omit<Upload, 'created_at'>) => Promise<Upload>;
+  createUpload: (upload: Omit<Upload, 'created_at'>, onProgress?: (percent: number) => void) => Promise<Upload>;
   modifyUpload: (id: string, updates: Partial<Upload>) => Promise<Upload | null>;
   removeUpload: (id: string) => Promise<boolean>;
   toggleReaction: (uploadId: string, guestId: string, type: 'heart' | 'laugh' | 'wow') => Promise<void>;
@@ -54,7 +54,11 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const isSupabase = isSupabaseConfigured;
 
   // ─── UTILITY: Upload base64 or file to Cloudflare R2 ───
-  const uploadMedia = async (fileOrBase64: string, fileName: string): Promise<string> => {
+  const uploadMedia = async (
+    fileOrBase64: string,
+    fileName: string,
+    onProgress?: (percent: number) => void
+  ): Promise<string> => {
     let blob: Blob;
     let mimeType = 'image/jpeg';
 
@@ -95,18 +99,35 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
 
       const { uploadUrl } = await response.json();
 
-      // 2. Upload file directly to Cloudflare R2 using the presigned URL
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': mimeType,
-        },
-        body: blob,
-      });
+      // 2. Upload file directly to Cloudflare R2 using the presigned URL with progress updates
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', mimeType);
 
-      if (!uploadResponse.ok) {
-        throw new Error(`Failed to upload to S3 Storage: ${uploadResponse.statusText}`);
-      }
+        if (onProgress) {
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const percent = Math.round((event.loaded / event.total) * 100);
+              onProgress(percent);
+            }
+          };
+        }
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Failed to upload to S3 Storage: ${xhr.statusText}`));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('Network error during upload to S3 Storage'));
+        };
+
+        xhr.send(blob);
+      });
 
       // 3. Return the public URL of the uploaded file on S3 Storage
       const publicUrlBase = import.meta.env.VITE_S3_PUBLIC_URL || '';
@@ -252,6 +273,39 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const ensureGuestSynced = async (guestId: string) => {
+    if (!isSupabase) return;
+    const guestExistsInState = guests.some((g) => g.id === guestId);
+    if (!guestExistsInState) {
+      // Guest not in Supabase — insert them now
+      const session = localStore.getGuestSession();
+      if (session && session.guest_id === guestId) {
+        const guestToSync: Guest = {
+          id: session.guest_id,
+          wedding_id: session.wedding_id,
+          first_name: session.first_name,
+          last_name: session.last_name,
+          table_number: '',
+          joined_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString(),
+        };
+        const { data: guestData, error: guestError } = await supabase!
+          .from('guests')
+          .upsert([guestToSync], { onConflict: 'id' })
+          .select()
+          .single();
+        if (!guestError && guestData) {
+          setGuests((prev) => {
+            if (prev.some((g) => g.id === guestData.id)) return prev;
+            return [...prev, guestData as Guest];
+          });
+        } else if (guestError) {
+          console.error('Error syncing guest to Supabase:', guestError);
+        }
+      }
+    }
+  };
+
   const registerGuest = async (firstName: string, lastName: string, tableNumber?: string) => {
     const tempId = crypto.randomUUID();
     const guestData: Guest = {
@@ -308,16 +362,20 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const createUpload = async (upload: Omit<Upload, 'created_at'>) => {
+  const createUpload = async (upload: Omit<Upload, 'created_at'>, onProgress?: (percent: number) => void) => {
     if (isSupabase) {
       let public_url = upload.public_url || '';
       
+      if (upload.guest_id) {
+        await ensureGuestSynced(upload.guest_id);
+      }
+
       // If local_url contains media file, upload to storage
       if (upload.local_url && (upload.local_url.startsWith('data:') || upload.local_url.startsWith('blob:'))) {
         try {
           const extension = upload.type === 'video' ? 'mp4' : 'jpg';
           const fileName = `uploads/${upload.id}.${extension}`;
-          public_url = await uploadMedia(upload.local_url, fileName);
+          public_url = await uploadMedia(upload.local_url, fileName, onProgress);
         } catch (err) {
           console.error('Error uploading upload file to Supabase storage:', err);
         }
@@ -378,9 +436,28 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeUpload = async (id: string) => {
+    const upload = uploads.find((u) => u.id === id);
     setUploads((prev) => prev.filter((u) => u.id !== id));
 
     if (isSupabase) {
+      if (upload && upload.public_url && (upload.type === 'photo' || upload.type === 'video')) {
+        try {
+          const urlObj = new URL(upload.public_url);
+          const pathName = decodeURIComponent(urlObj.pathname);
+          const filename = pathName.startsWith('/') ? pathName.substring(1) : pathName;
+          
+          await fetch('/api/delete-file', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ filename }),
+          });
+        } catch (err) {
+          console.error('Failed to delete media file from storage:', err);
+        }
+      }
+
       const { error } = await supabase!.from('uploads').delete().eq('id', id);
       if (error) {
         console.error('Error deleting upload in Supabase:', error);
@@ -396,6 +473,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     const reacted = hasReacted(uploadId, guestId, type);
 
     if (isSupabase) {
+      await ensureGuestSynced(guestId);
       if (reacted) {
         // Optimistic delete
         setReactions((prev) =>
@@ -441,6 +519,9 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   };
 
   const submitComment = async (uploadId: string, guestId: string, guestName: string, text: string) => {
+    if (isSupabase) {
+      await ensureGuestSynced(guestId);
+    }
     const newComment: Comment = {
       id: crypto.randomUUID(),
       upload_id: uploadId,

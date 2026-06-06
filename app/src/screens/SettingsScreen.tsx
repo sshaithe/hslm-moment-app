@@ -376,7 +376,7 @@ function PhotoUploadRow({
         >
           {currentPhoto ? (
             <>
-              <img src={currentPhoto} alt="" className="w-full h-full object-cover" />
+              <img src={currentPhoto || undefined} alt="" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <Upload size={16} className="text-white" />
               </div>

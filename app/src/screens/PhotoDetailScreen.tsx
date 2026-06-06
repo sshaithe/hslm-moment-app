@@ -70,7 +70,7 @@ export default function PhotoDetailScreen() {
       <div className="relative bg-charcoal">
         {upload.type === 'video' ? (
           <video
-            src={upload.local_url || upload.public_url}
+            src={upload.local_url || upload.public_url || undefined}
             className="w-full max-h-[60vh] object-contain"
             controls
             autoPlay
@@ -78,7 +78,7 @@ export default function PhotoDetailScreen() {
           />
         ) : upload.type === 'photo' ? (
           <img
-            src={upload.local_url || upload.public_url}
+            src={upload.local_url || upload.public_url || undefined}
             alt={upload.caption || ''}
             className="w-full max-h-[60vh] object-contain"
           />

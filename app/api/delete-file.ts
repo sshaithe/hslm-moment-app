@@ -1,5 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
 
@@ -29,7 +28,7 @@ if (!process.env.S3_BUCKET_NAME) {
   }
 }
 
-// Initialize the S3 client for generic S3-compatible storage (Backblaze B2, etc.)
+// Initialize the S3 client for generic S3-compatible storage
 const s3Client = new S3Client({
   region: 'global',
   endpoint: process.env.S3_ENDPOINT || 'https://s3.tebi.io',
@@ -37,7 +36,6 @@ const s3Client = new S3Client({
     accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
   },
-  // Disable automatic CRC32 checksum - Backblaze B2 CORS does not allow these custom headers
   requestChecksumCalculation: 'WHEN_REQUIRED',
   responseChecksumValidation: 'WHEN_REQUIRED',
 });
@@ -58,28 +56,23 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { filename, contentType } = req.body;
+    const { filename } = req.body;
 
-    if (!filename || !contentType) {
-      return res.status(400).json({ error: 'Missing filename or contentType' });
+    if (!filename) {
+      return res.status(400).json({ error: 'Missing filename' });
     }
 
-    const command = new PutObjectCommand({
+    const command = new DeleteObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME || '',
       Key: filename,
-      ContentType: contentType,
     });
 
-    // Generate the presigned URL valid for 300 seconds (5 minutes)
-    // unhoistableHeaders prevents checksum headers from appearing in the presigned URL
-    const uploadUrl = await getSignedUrl(s3Client, command, {
-      expiresIn: 300,
-      unhoistableHeaders: new Set(['x-amz-checksum-crc32', 'x-amz-sdk-checksum-algorithm']),
-    });
+    await s3Client.send(command);
+    console.log(`Successfully deleted file from S3 Storage: ${filename}`);
 
-    return res.status(200).json({ uploadUrl });
+    return res.status(200).json({ success: true });
   } catch (error: any) {
-    console.error('Error generating presigned URL:', error);
+    console.error('Error deleting file from S3 Storage:', error);
     return res.status(500).json({ error: error.message || 'Internal server error' });
   }
 }

@@ -25,6 +25,8 @@ export default function GalleryScreen() {
       .filter((u) => !u.is_hidden)
       .filter((u) => {
         const url = u.local_url || u.public_url;
+        // Skip media uploads (photo/video) that have no viewable URL at all
+        if (u.type !== 'message' && !url) return false;
         return u.type === 'message' || !url || !url.startsWith('blob:');
       });
 
@@ -99,7 +101,7 @@ export default function GalleryScreen() {
       {/* Gallery Banner (admin-set) */}
       {wedding.gallery_banner && (
         <div className="relative h-32 overflow-hidden">
-          <img src={wedding.gallery_banner} alt="Gallery banner" className="w-full h-full object-cover" />
+          <img src={wedding.gallery_banner || undefined} alt="Gallery banner" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-ivory/80" />
         </div>
       )}
@@ -151,7 +153,7 @@ function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: str
       <div className="relative overflow-hidden">
         {upload.type === 'video' ? (
           <video
-            src={upload.local_url || upload.public_url}
+            src={upload.local_url || upload.public_url || undefined}
             className="w-full object-cover"
             autoPlay
             muted
@@ -160,7 +162,7 @@ function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: str
           />
         ) : (
           <img
-            src={upload.local_url || upload.public_url}
+            src={upload.local_url || upload.public_url || undefined}
             alt={upload.caption || ''}
             className="w-full object-cover"
             loading="lazy"

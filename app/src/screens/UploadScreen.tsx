@@ -21,6 +21,8 @@ export default function UploadScreen() {
   const [caption, setCaption] = useState('');
   const [messageText, setMessageText] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [sparklePos, setSparklePos] = useState<{ x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,13 +77,25 @@ export default function UploadScreen() {
       report_count: 0,
     };
 
-    await createUpload(upload);
-    setShowSuccess(true);
-    addToast(t('uploadSuccessToast'), 'success');
+    setIsUploading(true);
+    setUploadProgress(0);
 
-    setTimeout(() => {
-      navigate('/gallery');
-    }, 1200);
+    try {
+      await createUpload(upload, (progress) => {
+        setUploadProgress(progress);
+      });
+      setShowSuccess(true);
+      addToast(t('uploadSuccessToast'), 'success');
+
+      setTimeout(() => {
+        navigate('/gallery');
+      }, 1200);
+    } catch (err) {
+      console.error('Upload error:', err);
+      addToast('Upload failed. Please try again.', 'error');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const canSubmit = uploadType === 'message' ? messageText.trim().length > 0 : (uploadType === 'video' ? file !== null : true);
@@ -122,7 +136,34 @@ export default function UploadScreen() {
         </button>
       </div>
 
-      {showSuccess ? (
+      {isUploading ? (
+        <div className="flex-1 flex flex-col items-center justify-center px-6 animate-fade-in">
+          <div className="w-full max-w-xs text-center">
+            {/* Pulsing upload cloud icon */}
+            <div className="w-20 h-20 rounded-full bg-blush flex items-center justify-center mx-auto mb-6 relative">
+              <UploadCloud size={32} className="text-gold animate-pulse" />
+              <div className="absolute inset-0 rounded-full border-2 border-gold/20 border-t-gold animate-spin" />
+            </div>
+            
+            <h3 className="font-heading text-xl text-charcoal mb-2">
+              {uploadProgress < 100 ? 'Uploading your memory...' : 'Processing...'}
+            </h3>
+            
+            {/* Progress Bar */}
+            <div className="w-full h-2.5 bg-blush rounded-full overflow-hidden mb-3 border border-accent-border/40 shadow-inner">
+              <div
+                className="h-full gradient-gold rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            
+            <div className="flex justify-between items-center text-xs text-muted-warm font-medium px-1">
+              <span>{uploadProgress < 100 ? `${uploadProgress}% completed` : 'Writing to database...'}</span>
+              <span>{uploadProgress < 100 ? 'Please wait' : 'Almost ready'}</span>
+            </div>
+          </div>
+        </div>
+      ) : showSuccess ? (
         <div className="flex-1 flex flex-col items-center justify-center animate-fade-in">
           {sparklePos && <Sparkle x={sparklePos.x} y={sparklePos.y} />}
           <div className="w-20 h-20 rounded-full gradient-gold flex items-center justify-center mb-4">

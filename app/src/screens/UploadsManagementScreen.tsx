@@ -173,8 +173,10 @@ export default function UploadsManagementScreen() {
                   </td>
                   <td className="p-3">
                     <div className="w-10 h-10 rounded-lg overflow-hidden bg-blush">
-                      {upload.type === 'photo' || upload.type === 'video' ? (
-                        <img src={upload.local_url || upload.public_url} alt="" className="w-full h-full object-cover" />
+                      {upload.type === 'video' ? (
+                        <video src={upload.local_url || upload.public_url || undefined} className="w-full h-full object-cover" muted playsInline />
+                      ) : upload.type === 'photo' ? (
+                        <img src={upload.local_url || upload.public_url || undefined} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <MessageSquare size={14} className="text-gold" />
@@ -197,15 +199,26 @@ export default function UploadsManagementScreen() {
                   <td className="p-3">
                     <div className="flex items-center gap-1">
                       {!upload.is_approved && (
-                        <button onClick={() => { modifyUpload(upload.id, { is_approved: true }); }} className="p-1 rounded hover:bg-green-50 text-green-600">
+                        <button onClick={() => { modifyUpload(upload.id, { is_approved: true }); }} className="p-1 rounded hover:bg-green-50 text-green-600" title={t('approve') || 'Approve'}>
                           <CheckCircle size={14} />
                         </button>
                       )}
-                      <button onClick={() => { modifyUpload(upload.id, { is_hidden: true }); }} className="p-1 rounded hover:bg-red-50 text-red-400">
+                      <button onClick={() => { modifyUpload(upload.id, { is_hidden: true }); }} className="p-1 rounded hover:bg-red-50 text-red-400" title={t('hide') || 'Hide'}>
                         <EyeOff size={14} />
                       </button>
-                      <button onClick={() => { modifyUpload(upload.id, { is_featured: true }); }} className="p-1 rounded hover:bg-gold/10 text-gold">
+                      <button onClick={() => { modifyUpload(upload.id, { is_featured: true }); }} className="p-1 rounded hover:bg-gold/10 text-gold" title={t('feature') || 'Feature'}>
                         <Star size={14} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm('Are you sure you want to permanently delete this memory from the app and cloud storage?')) {
+                            removeUpload(upload.id);
+                          }
+                        }}
+                        className="p-1 rounded hover:bg-red-50 text-red-500"
+                        title={t('delete') || 'Delete'}
+                      >
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </td>

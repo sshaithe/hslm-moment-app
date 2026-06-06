@@ -60,13 +60,24 @@ export default function SlideshowScreen() {
       onClick={() => setShowControls(true)}
       onMouseMove={() => setShowControls(true)}
     >
-      {/* Image */}
+      {/* Image or Video */}
       <div key={fadeKey} className="absolute inset-0 animate-fade-in">
-        <img
-          src={current.local_url || current.public_url}
-          alt=""
-          className="w-full h-full object-contain"
-        />
+        {current.type === 'video' ? (
+          <video
+            src={current.local_url || current.public_url || undefined}
+            className="w-full h-full object-contain"
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : (
+          <img
+            src={current.local_url || current.public_url || undefined}
+            alt=""
+            className="w-full h-full object-contain"
+          />
+        )}
       </div>
 
       {/* Top Overlay */}
