@@ -1,13 +1,13 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-// Initialize the S3 client for Cloudflare R2
+// Initialize the S3 client for generic S3-compatible storage (Tebi.io, Storj, R2, etc.)
 const s3Client = new S3Client({
-  region: 'auto',
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  region: 'global',
+  endpoint: process.env.S3_ENDPOINT || 'https://s3.tebi.io',
   credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+    accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
   },
 });
 
@@ -34,7 +34,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const command = new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME || '',
+      Bucket: process.env.S3_BUCKET_NAME || '',
       Key: filename,
       ContentType: contentType,
     });

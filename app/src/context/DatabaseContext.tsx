@@ -105,11 +105,11 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error(`Failed to upload to Cloudflare R2: ${uploadResponse.statusText}`);
+        throw new Error(`Failed to upload to S3 Storage: ${uploadResponse.statusText}`);
       }
 
-      // 3. Return the public URL of the uploaded file on Cloudflare R2
-      const publicUrlBase = import.meta.env.VITE_R2_PUBLIC_URL || '';
+      // 3. Return the public URL of the uploaded file on S3 Storage
+      const publicUrlBase = import.meta.env.VITE_S3_PUBLIC_URL || '';
       return `${publicUrlBase.replace(/\/$/, '')}/${fileName}`;
     }
 
