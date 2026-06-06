@@ -8,7 +8,7 @@ export default function GuestLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const guest = getGuestSession();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
 
   const isActive = (path: string) => location.pathname === path;
 

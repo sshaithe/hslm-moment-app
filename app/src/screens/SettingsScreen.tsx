@@ -218,7 +218,7 @@ export default function SettingsScreen() {
       </div>
 
       {/* Photo Customization */}
-      <PhotoCustomizationSection t={t} language={language} onSaved={() => addToast(t('settingsSaved'), 'success')} />
+      <PhotoCustomizationSection language={language} onSaved={() => addToast(t('settingsSaved'), 'success')} />
 
       {/* Save */}
       <button
@@ -268,11 +268,9 @@ function SettingRow({
 
 // ─── Photo Customization Section ────────────────────────────────────────────
 function PhotoCustomizationSection({
-  t,
   language,
   onSaved,
 }: {
-  t: (key: string) => string;
   language: string;
   onSaved: () => void;
 }) {

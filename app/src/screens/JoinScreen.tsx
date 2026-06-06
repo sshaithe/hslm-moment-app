@@ -9,7 +9,7 @@ import type { Guest } from '@/lib/types';
 export default function JoinScreen() {
   const navigate = useNavigate();
   const wedding = getWedding();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [tableNumber, setTableNumber] = useState('');

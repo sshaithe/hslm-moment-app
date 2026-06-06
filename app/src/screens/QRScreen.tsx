@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Download, Copy } from 'lucide-react';
 import { getWedding } from '@/lib/localStore';

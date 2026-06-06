@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Search, EyeOff, Trash2, CheckCircle, Star, MessageSquare, Filter } from 'lucide-react';
 import { getUploads, updateUpload } from '@/lib/localStore';
 import { useLanguage } from '@/i18n/LanguageContext';
+import type { TranslationKey } from '@/i18n/LanguageContext';
 import type { Upload } from '@/lib/types';
 
 type StatusFilter = 'all' | 'visible' | 'hidden' | 'pending' | 'reported' | 'featured';
 type TypeFilter = 'all' | 'photo' | 'video' | 'message';
 
 export default function UploadsManagementScreen() {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -118,7 +119,7 @@ export default function UploadsManagementScreen() {
                 statusFilter === s ? 'bg-gold text-white' : 'bg-blush/50 text-muted-warm hover:bg-blush'
               }`}
             >
-              {s === 'all' ? t('all') : t(s)}
+              {s === 'all' ? t('all') : t(s as TranslationKey)}
             </button>
           ))}
         </div>

@@ -1,10 +1,11 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState } from 'react';
+import type { ReactNode } from 'react';
 import { en } from './en';
 import { tr } from './tr';
 import type { Language } from '@/lib/types';
 import { getStoredLanguage, storeLanguage } from '@/lib/localStore';
 
-type TranslationKey = keyof typeof en;
+export type TranslationKey = keyof typeof en;
 
 interface LanguageContextType {
   language: Language;
@@ -23,7 +24,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   };
 
   const t = (key: TranslationKey, vars?: Record<string, string>): string => {
-    const translations = language === 'tr' ? tr : en;
+    const translations = (language === 'tr' ? tr : en) as Record<TranslationKey, string>;
     let text = (translations[key] || en[key] || key) as string;
     
     if (vars) {
