@@ -190,7 +190,7 @@ function getDefaultWedding(): Wedding {
     wedding_date: '2026-06-13',
     venue: 'Bey Garden / Gürpınar',
     slug: 'acelya-muhammet-wedding',
-    admin_password_hash: '',
+    admin_password_hash: 'admin050505',
     created_at: new Date().toISOString(),
     is_public: true,
     require_guest_name: true,

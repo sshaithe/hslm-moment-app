@@ -565,9 +565,9 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       
       const savedHash = data?.admin_password_hash || '';
       // Simple direct compare for prototype (or bcrypt if hash is active)
-      success = password === savedHash || savedHash === '';
+      success = password === savedHash;
     } else {
-      success = password === wedding.admin_password_hash || wedding.admin_password_hash === '';
+      success = password === wedding.admin_password_hash;
     }
 
     if (success) {

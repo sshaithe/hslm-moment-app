@@ -126,5 +126,5 @@ insert into public.weddings (
     auto_hide_reported, approve_before_display, slideshow_approval_mode, uploads_paused
 ) values (
     'wedding-demo-001', 'Açelya & Muhammet', 'Açelya', 'Muhammet', '2026-06-13', 'Bey Garden / Gürpınar', 
-    'acelya-muhammet-wedding', '', true, true, true, true, true, true, false, false, false
+    'acelya-muhammet-wedding', 'admin050505', true, true, true, true, true, true, false, false, false
 ) on conflict (id) do nothing;
