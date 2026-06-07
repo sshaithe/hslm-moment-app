@@ -85,9 +85,27 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       }
       blob = new Blob([u8arr], { type: mime });
       mimeType = mime;
+    } else if (fileOrBase64.startsWith('blob:')) {
+      // Use XMLHttpRequest for blob URLs because WebKit/Safari fetch() has bugs loading blob URLs
+      blob = await new Promise<Blob>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', fileOrBase64, true);
+        xhr.responseType = 'blob';
+        xhr.onload = () => {
+          if (xhr.status === 200 || xhr.status === 0) {
+            resolve(xhr.response);
+          } else {
+            reject(new Error(`Failed to read blob URL (status: ${xhr.status})`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Failed to read blob URL due to network/sandbox constraints'));
+        xhr.send();
+      });
+      mimeType = blob.type;
     } else {
-      // Fallback or treat as fetchable URL (blob url)
+      // Standard fetch fallback for relative or remote URLs
       const res = await fetch(fileOrBase64);
+      if (!res.ok) throw new Error(`Failed to fetch media source: ${res.statusText}`);
       blob = await res.blob();
       mimeType = blob.type;
     }
