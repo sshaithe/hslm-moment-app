@@ -7,6 +7,7 @@ import ReactionBar from '@/components/shared/ReactionBar';
 import { useToast } from '@/hooks/useToast';
 import ToastContainer from '@/components/shared/Toast';
 import EmojiPicker from '@/components/shared/EmojiPicker';
+import { getMediaUrl } from '@/lib/mediaHelper';
 
 export default function PhotoDetailScreen() {
   const { id } = useParams<{ id: string }>();
@@ -70,7 +71,7 @@ export default function PhotoDetailScreen() {
       <div className="relative bg-charcoal">
         {upload.type === 'video' ? (
           <video
-            src={upload.local_url || upload.public_url || undefined}
+            src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
             className="w-full max-h-[60vh] object-contain"
             controls
             autoPlay
@@ -78,7 +79,7 @@ export default function PhotoDetailScreen() {
           />
         ) : upload.type === 'photo' ? (
           <img
-            src={upload.local_url || upload.public_url || undefined}
+            src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
             alt={upload.caption || ''}
             className="w-full max-h-[60vh] object-contain"
           />

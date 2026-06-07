@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Play, Pause, X } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import Logo from '@/components/shared/Logo';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { getMediaUrl } from '@/lib/mediaHelper';
 
 export default function SlideshowScreen() {
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ export default function SlideshowScreen() {
       <div key={fadeKey} className="absolute inset-0 animate-fade-in">
         {current.type === 'video' ? (
           <video
-            src={current.local_url || current.public_url || undefined}
+            src={getMediaUrl(current.local_url || current.public_url) || undefined}
             className="w-full h-full object-contain"
             autoPlay
             loop
@@ -73,7 +74,7 @@ export default function SlideshowScreen() {
           />
         ) : (
           <img
-            src={current.local_url || current.public_url || undefined}
+            src={getMediaUrl(current.local_url || current.public_url) || undefined}
             alt=""
             className="w-full h-full object-contain"
           />

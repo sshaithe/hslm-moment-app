@@ -4,6 +4,7 @@ import { Download, QrCode, Monitor, Pause, Play, Image, MessageSquare, Users, Cl
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { Upload } from '@/lib/types';
+import { getMediaUrl } from '@/lib/mediaHelper';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -203,9 +204,9 @@ export default function AdminDashboard() {
             <div key={upload.id} className="flex items-center gap-3 p-4 hover:bg-ivory/50 transition-colors">
               <div className="w-12 h-12 rounded-lg overflow-hidden bg-blush flex-shrink-0">
                 {upload.type === 'video' ? (
-                  <video src={upload.local_url || upload.public_url || undefined} className="w-full h-full object-cover" muted playsInline />
+                  <video src={getMediaUrl(upload.local_url || upload.public_url) || undefined} className="w-full h-full object-cover" muted playsInline />
                 ) : upload.type === 'photo' ? (
-                  <img src={upload.local_url || upload.public_url || undefined} alt="" className="w-full h-full object-cover" />
+                  <img src={getMediaUrl(upload.local_url || upload.public_url) || undefined} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <MessageSquare size={16} className="text-gold" />

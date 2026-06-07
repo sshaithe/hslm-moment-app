@@ -3,6 +3,7 @@ import { Calendar, MapPin, Image, Users, Mail, Video, Lock } from 'lucide-react'
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import GoldDivider from '@/components/shared/GoldDivider';
+import { getMediaUrl } from '@/lib/mediaHelper';
 
 export default function LandingScreen() {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ export default function LandingScreen() {
     })
     .slice(0, 10);
 
-  const heroSrc = wedding.hero_photo || '/hero-wedding.jpg';
+  const heroSrc = getMediaUrl(wedding.hero_photo) || '/hero-wedding.jpg';
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -103,7 +104,7 @@ export default function LandingScreen() {
         {wedding.couple_photo && (
           <div className="flex justify-center mb-8">
             <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-gold/30 shadow-elevated ring-2 ring-ivory">
-              <img src={wedding.couple_photo || undefined} alt="Couple" className="w-full h-full object-cover" />
+              <img src={getMediaUrl(wedding.couple_photo) || undefined} alt="Couple" className="w-full h-full object-cover" />
             </div>
           </div>
         )}
@@ -121,7 +122,7 @@ export default function LandingScreen() {
                   {upload.type === 'video' ? (
                     <div className="relative w-full h-full">
                       <video
-                        src={upload.local_url || upload.public_url || undefined}
+                        src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
                         className="w-full h-full object-cover"
                         muted
                         playsInline
@@ -134,7 +135,7 @@ export default function LandingScreen() {
                     </div>
                   ) : upload.type === 'photo' ? (
                     <img
-                      src={upload.local_url || upload.public_url || undefined}
+                      src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
                       alt=""
                       className="w-full h-full object-cover"
                     />

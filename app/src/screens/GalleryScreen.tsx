@@ -4,6 +4,7 @@ import { Plus, Mail } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { GalleryTab, Upload } from '@/lib/types';
+import { getMediaUrl } from '@/lib/mediaHelper';
 
 export default function GalleryScreen() {
   const navigate = useNavigate();
@@ -101,7 +102,7 @@ export default function GalleryScreen() {
       {/* Gallery Banner (admin-set) */}
       {wedding.gallery_banner && (
         <div className="relative h-32 overflow-hidden">
-          <img src={wedding.gallery_banner || undefined} alt="Gallery banner" className="w-full h-full object-cover" />
+          <img src={getMediaUrl(wedding.gallery_banner) || undefined} alt="Gallery banner" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-ivory/80" />
         </div>
       )}
@@ -154,7 +155,7 @@ function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: str
       <div className="relative overflow-hidden bg-blush/10 min-h-[120px]">
         {upload.type === 'video' ? (
           <video
-            src={upload.local_url || upload.public_url || undefined}
+            src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
             className="w-full h-auto block object-cover"
             autoPlay
             muted
@@ -163,7 +164,7 @@ function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: str
           />
         ) : (
           <img
-            src={upload.local_url || upload.public_url || undefined}
+            src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
             alt={upload.caption || ''}
             className="w-full h-auto block"
           />

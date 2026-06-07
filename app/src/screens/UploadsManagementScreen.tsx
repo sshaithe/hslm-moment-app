@@ -4,6 +4,7 @@ import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { TranslationKey } from '@/i18n/LanguageContext';
 import type { Upload } from '@/lib/types';
+import { getMediaUrl } from '@/lib/mediaHelper';
 
 type StatusFilter = 'all' | 'visible' | 'hidden' | 'pending' | 'reported' | 'featured';
 type TypeFilter = 'all' | 'photo' | 'video' | 'message';
@@ -174,9 +175,9 @@ export default function UploadsManagementScreen() {
                   <td className="p-3">
                     <div className="w-10 h-10 rounded-lg overflow-hidden bg-blush">
                       {upload.type === 'video' ? (
-                        <video src={upload.local_url || upload.public_url || undefined} className="w-full h-full object-cover" muted playsInline />
+                        <video src={getMediaUrl(upload.local_url || upload.public_url) || undefined} className="w-full h-full object-cover" muted playsInline />
                       ) : upload.type === 'photo' ? (
-                        <img src={upload.local_url || upload.public_url || undefined} alt="" className="w-full h-full object-cover" />
+                        <img src={getMediaUrl(upload.local_url || upload.public_url) || undefined} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <MessageSquare size={14} className="text-gold" />

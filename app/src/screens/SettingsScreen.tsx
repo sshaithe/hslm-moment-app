@@ -5,6 +5,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import { useToast } from '@/hooks/useToast';
 import ToastContainer from '@/components/shared/Toast';
 import type { Wedding } from '@/lib/types';
+import { getMediaUrl } from '@/lib/mediaHelper';
 
 interface SettingItem {
   key: string;
@@ -376,7 +377,7 @@ function PhotoUploadRow({
         >
           {currentPhoto ? (
             <>
-              <img src={currentPhoto || undefined} alt="" className="w-full h-full object-cover" />
+              <img src={getMediaUrl(currentPhoto) || undefined} alt="" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <Upload size={16} className="text-white" />
               </div>
