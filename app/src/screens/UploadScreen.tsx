@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Film, MessageSquare, X, UploadCloud, Shield, ArrowLeft } from 'lucide-react';
+import { Camera, Film, MessageSquare, X, UploadCloud, Shield, ArrowLeft, RefreshCw, Video, Library, Square } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -26,7 +26,169 @@ export default function UploadScreen() {
   const [sparklePos, setSparklePos] = useState<{ x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Live Camera states
+  const [sourceMode, setSourceMode] = useState<'library' | 'camera'>('library');
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [isRecording, setIsRecording] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
   const isPaused = wedding.uploads_paused;
+
+  // ─── 1. REGISTRATION WORKFLOW CHECK ───
+  useEffect(() => {
+    if (!guest && wedding.require_guest_name) {
+      // Force registration first, returning them here once done
+      navigate('/join?redirect=/upload');
+    }
+  }, [guest, wedding.require_guest_name, navigate]);
+
+  // ─── 2. LIVE CAMERA OPERATIONS ───
+  const startCamera = async (mode = facingMode) => {
+    try {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+
+      const constraints = {
+        video: {
+          facingMode: mode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: uploadType === 'video'
+      };
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      setStream(mediaStream);
+      setIsCameraActive(true);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+    } catch (err) {
+      console.error('Failed to access camera stream:', err);
+      addToast('Cannot access camera. Falling back to library upload.', 'error');
+      setSourceMode('library');
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      setStream(null);
+    }
+    setIsCameraActive(false);
+    setIsRecording(false);
+  };
+
+  const flipCamera = () => {
+    const nextMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(nextMode);
+    if (isCameraActive) {
+      startCamera(nextMode);
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (facingMode === 'user') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const fileObj = new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setFile(fileObj);
+        const previewUrl = URL.createObjectURL(blob);
+        setPreview(previewUrl);
+        stopCamera();
+      }
+    }, 'image/jpeg', 0.95);
+  };
+
+  const startRecording = () => {
+    if (!stream) return;
+    chunksRef.current = [];
+
+    let options = { mimeType: 'video/webm;codecs=vp9' };
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+      options = { mimeType: 'video/webm;codecs=vp8' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/webm' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          options = { mimeType: 'video/mp4' };
+        }
+      }
+    }
+
+    try {
+      const recorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const videoBlob = new Blob(chunksRef.current, { type: recorder.mimeType || 'video/mp4' });
+        const extension = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const fileObj = new File([videoBlob], `capture_${Date.now()}.${extension}`, { type: videoBlob.type });
+        setFile(fileObj);
+        const previewUrl = URL.createObjectURL(videoBlob);
+        setPreview(previewUrl);
+        stopCamera();
+      };
+
+      recorder.start(100);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Failed to initiate MediaRecorder:', err);
+      addToast('Direct recording is not supported in this browser.', 'error');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  // Turn off/on camera on tab switch or preview resets
+  useEffect(() => {
+    if (sourceMode === 'camera' && !preview && !isCameraActive && (uploadType === 'photo' || uploadType === 'video')) {
+      startCamera();
+    }
+    return () => {
+      stopCamera();
+    };
+  }, [sourceMode, uploadType, preview]);
+
+  // Clean up streams on final unmount
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [stream]);
 
   // Compress image client-side to save bandwidth/storage and prevent Safari memory crashes
   const compressImage = (file: File, maxWidth = 1920, maxHeight = 1920, quality = 0.8): Promise<Blob> => {
@@ -96,7 +258,7 @@ export default function UploadScreen() {
 
   const handleSubmit = async () => {
     if (!guest && wedding.require_guest_name) {
-      navigate('/join');
+      navigate('/join?redirect=/upload');
       return;
     }
 
@@ -200,7 +362,6 @@ export default function UploadScreen() {
       {isUploading ? (
         <div className="flex-1 flex flex-col items-center justify-center px-6 animate-fade-in">
           <div className="w-full max-w-xs text-center">
-            {/* Pulsing upload cloud icon */}
             <div className="w-20 h-20 rounded-full bg-blush flex items-center justify-center mx-auto mb-6 relative">
               <UploadCloud size={32} className="text-gold animate-pulse" />
               <div className="absolute inset-0 rounded-full border-2 border-gold/20 border-t-gold animate-spin" />
@@ -210,7 +371,6 @@ export default function UploadScreen() {
               {uploadProgress < 100 ? 'Uploading your memory...' : 'Processing...'}
             </h3>
             
-            {/* Progress Bar */}
             <div className="w-full h-2.5 bg-blush rounded-full overflow-hidden mb-3 border border-accent-border/40 shadow-inner">
               <div
                 className="h-full gradient-gold rounded-full transition-all duration-300 ease-out"
@@ -251,7 +411,13 @@ export default function UploadScreen() {
               {typeOptions.map((opt) => (
                 <button
                   key={opt.type}
-                  onClick={() => { setUploadType(opt.type); setFile(null); setPreview(null); }}
+                  onClick={() => { 
+                    setUploadType(opt.type); 
+                    setFile(null); 
+                    setPreview(null); 
+                    setSourceMode('library');
+                    stopCamera();
+                  }}
                   className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-full text-sm font-medium transition-all ${
                     uploadType === opt.type
                       ? 'bg-charcoal text-ivory'
@@ -264,6 +430,38 @@ export default function UploadScreen() {
               ))}
             </div>
           </div>
+
+          {/* Source Selector (Library vs. Live Camera) */}
+          {uploadType !== 'message' && !preview && (
+            <div className="px-5 mb-3 animate-fade-in">
+              <div className="flex bg-blush/40 p-1 rounded-full border border-accent-border/30">
+                <button
+                  type="button"
+                  onClick={() => { setSourceMode('library'); stopCamera(); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    sourceMode === 'library'
+                      ? 'bg-white text-gold shadow-sm'
+                      : 'text-muted-warm hover:text-charcoal'
+                  }`}
+                >
+                  <Library size={13} />
+                  <span>Upload from Library</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSourceMode('camera'); startCamera(); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    sourceMode === 'camera'
+                      ? 'bg-white text-gold shadow-sm'
+                      : 'text-muted-warm hover:text-charcoal'
+                  }`}
+                >
+                  <Camera size={13} />
+                  <span>Live Camera</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Upload Zone */}
           <div className="px-5 flex-1">
@@ -284,11 +482,17 @@ export default function UploadScreen() {
               <div
                 onDrop={handleDrop}
                 onDragOver={(e) => e.preventDefault()}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => {
+                  if (sourceMode === 'library' && !preview) {
+                    fileInputRef.current?.click();
+                  }
+                }}
                 className={`w-full rounded-xl border-2 border-dashed transition-colors overflow-hidden ${
                   preview
                     ? 'border-gold/30'
-                    : 'border-gold/40 hover:border-gold/70 bg-blush/30'
+                    : sourceMode === 'camera'
+                    ? 'border-gold/30 bg-black'
+                    : 'border-gold/40 hover:border-gold/70 bg-blush/30 cursor-pointer'
                 }`}
                 style={{ aspectRatio: '4/3' }}
               >
@@ -312,6 +516,55 @@ export default function UploadScreen() {
                     >
                       <X size={14} className="text-white" />
                     </button>
+                  </div>
+                ) : sourceMode === 'camera' ? (
+                  <div className="relative w-full h-full bg-black">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                      style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
+                    />
+                    
+                    {/* Camera Controls Overlay */}
+                    <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-6 z-20">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); flipCamera(); }}
+                        className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20 flex items-center justify-center text-white active:scale-95"
+                      >
+                        <RefreshCw size={18} />
+                      </button>
+
+                      {uploadType === 'photo' ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); capturePhoto(); }}
+                          className="w-14 h-14 rounded-full border-4 border-white bg-gold/90 hover:bg-gold flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); isRecording ? stopRecording() : startRecording(); }}
+                          className={`w-14 h-14 rounded-full border-4 border-white flex items-center justify-center shadow-lg active:scale-90 transition-all ${
+                            isRecording ? 'bg-red-600 animate-pulse' : 'bg-red-500'
+                          }`}
+                        >
+                          {isRecording ? <Square size={16} className="text-white fill-white" /> : <Video size={20} className="text-white fill-white" />}
+                        </button>
+                      )}
+
+                      <div className="w-10" /> {/* Spacer for visual centering */}
+                    </div>
+
+                    {isRecording && (
+                      <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 animate-pulse z-20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                        <span>REC</span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-center px-6">
@@ -343,9 +596,9 @@ export default function UploadScreen() {
                 setSparklePos({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
                 handleSubmit();
               }}
-              disabled={!canSubmit}
+              disabled={!canSubmit || isCameraActive}
               className={`w-full py-3.5 rounded-full font-medium text-sm transition-all ${
-                canSubmit
+                canSubmit && !isCameraActive
                   ? 'gradient-gold text-white shadow-elevated hover:opacity-90 active:scale-[0.98]'
                   : 'bg-charcoal/10 text-muted-warm/40 cursor-not-allowed'
               }`}

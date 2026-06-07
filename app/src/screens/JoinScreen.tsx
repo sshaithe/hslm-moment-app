@@ -28,7 +28,9 @@ export default function JoinScreen() {
     }
 
     await registerGuest(firstName.trim(), lastName.trim(), tableNumber.trim());
-    navigate('/');
+    const params = new URLSearchParams(window.location.search);
+    const redirectPath = params.get('redirect') || '/';
+    navigate(redirectPath);
   };
 
   return (
