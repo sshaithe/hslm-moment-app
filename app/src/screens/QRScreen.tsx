@@ -12,7 +12,8 @@ export default function QRScreen() {
   const { toasts, addToast, removeToast } = useToast();
   const posterRef = useRef<HTMLDivElement>(null);
 
-  const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1');
+  const siteUrl = import.meta.env.VITE_SITE_URL || (isLocal ? window.location.origin : 'https://acelyamuhammet.vercel.app');
   const weddingUrl = `${siteUrl.replace(/\/$/, '')}/wedding/${wedding.slug}`;
 
   const handleCopy = () => {
