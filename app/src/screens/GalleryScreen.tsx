@@ -120,17 +120,18 @@ export default function GalleryScreen() {
         ) : (
           <div className="columns-2 gap-3">
             {filteredUploads.map((upload) => (
-              <button
-                key={upload.id}
-                onClick={() => navigate(`/photo/${upload.id}`)}
-                className="break-inside-avoid mb-3 w-full text-left"
-              >
-                {upload.type === 'message' ? (
-                  <MessageCard upload={upload} />
-                ) : (
-                  <MediaCard upload={upload} formatTime={formatTime} />
-                )}
-              </button>
+              <div key={upload.id} className="break-inside-avoid mb-3">
+                <button
+                  onClick={() => navigate(`/photo/${upload.id}`)}
+                  className="w-full text-left focus:outline-none block"
+                >
+                  {upload.type === 'message' ? (
+                    <MessageCard upload={upload} />
+                  ) : (
+                    <MediaCard upload={upload} formatTime={formatTime} />
+                  )}
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -154,7 +155,7 @@ function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: str
         {upload.type === 'video' ? (
           <video
             src={upload.local_url || upload.public_url || undefined}
-            className="w-full object-cover"
+            className="w-full h-auto block object-cover"
             autoPlay
             muted
             loop
@@ -164,7 +165,7 @@ function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: str
           <img
             src={upload.local_url || upload.public_url || undefined}
             alt={upload.caption || ''}
-            className="w-full object-cover"
+            className="w-full h-auto block"
             loading="lazy"
           />
         )}
