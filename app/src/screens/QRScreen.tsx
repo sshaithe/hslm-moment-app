@@ -12,7 +12,8 @@ export default function QRScreen() {
   const { toasts, addToast, removeToast } = useToast();
   const posterRef = useRef<HTMLDivElement>(null);
 
-  const weddingUrl = `${window.location.origin}/wedding/${wedding.slug}`;
+  const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+  const weddingUrl = `${siteUrl.replace(/\/$/, '')}/wedding/${wedding.slug}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(weddingUrl).then(() => {
