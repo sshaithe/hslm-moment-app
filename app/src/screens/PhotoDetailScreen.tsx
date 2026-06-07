@@ -12,11 +12,19 @@ import { getMediaUrl } from '@/lib/mediaHelper';
 export default function PhotoDetailScreen() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { wedding, currentGuest: guest, uploads, comments: allComments, submitComment, modifyUpload } = useDatabase();
+  const { wedding, currentGuest: guest, uploads, comments: allComments, submitComment, modifyUpload, registerGuest } = useDatabase();
   const { t, language } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
   const [commentText, setCommentText] = useState('');
   const [showReportConfirm, setShowReportConfirm] = useState(false);
+
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regLastName, setRegLastName] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [errors, setErrors] = useState<Record<string, boolean>>({});
+
+  const nameRegex = /^[a-zA-ZçğıöşüÇĞİÖŞÜ\s'\-]+$/;
 
   const upload = uploads.find((u) => u.id === id);
 
@@ -38,9 +46,38 @@ export default function PhotoDetailScreen() {
       return;
     }
 
-    const guestName = guest ? `${guest.first_name} ${guest.last_name}` : 'Anonymous';
-    await submitComment(upload.id, guestId, guestName, commentText.trim());
+    if (!guest) {
+      setShowRegisterModal(true);
+      return;
+    }
+
+    const guestName = `${guest.first_name} ${guest.last_name}`;
+    await submitComment(upload.id, guest.guest_id, guestName, commentText.trim());
     setCommentText('');
+  };
+
+  const handleRegisterAndComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regFirstName.trim() || !regLastName.trim() || errors.firstName || errors.lastName) return;
+
+    try {
+      setIsRegistering(true);
+      const newGuest = await registerGuest(regFirstName.trim(), regLastName.trim());
+      
+      const guestName = `${newGuest.first_name} ${newGuest.last_name}`;
+      await submitComment(upload.id, newGuest.id, guestName, commentText.trim());
+      
+      setCommentText('');
+      setShowRegisterModal(false);
+      setRegFirstName('');
+      setRegLastName('');
+      addToast(t('actionSuccess'), 'success');
+    } catch (err) {
+      console.error('Registration failed:', err);
+      addToast(language === 'tr' ? 'Kayıt sırasında bir hata oluştu' : 'Failed to register', 'error');
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   const handleReport = async () => {
@@ -222,6 +259,106 @@ export default function PhotoDetailScreen() {
           )}
         </div>
       </div>
+
+      {/* Registration Modal for Unregistered Guests commenting */}
+      {showRegisterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => {
+          setShowRegisterModal(false);
+          setRegFirstName('');
+          setRegLastName('');
+          setErrors({});
+        }}>
+          <div 
+            className="bg-white rounded-3xl w-full max-w-[380px] p-6 shadow-premium border border-accent-border/30 relative animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setShowRegisterModal(false);
+                setRegFirstName('');
+                setRegLastName('');
+                setErrors({});
+              }}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-blush flex items-center justify-center text-muted-warm hover:text-charcoal transition-colors"
+            >
+              <X size={16} />
+            </button>
+
+            <h3 className="font-heading text-xl text-charcoal text-center mb-2">
+              {language === 'tr' ? 'Yorum Yapmak İçin Katılın' : 'Join to Comment'}
+            </h3>
+            <p className="text-xs text-muted-warm text-center mb-6 leading-relaxed">
+              {language === 'tr' 
+                ? 'Lütfen isminizi girin. Bu isim yorumunuzun yanında görüntülenecektir.' 
+                : 'Please enter your name. This name will appear next to your comment.'}
+            </p>
+
+            <form onSubmit={handleRegisterAndComment} className="space-y-4">
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-warm/80 block mb-1">
+                  {t('firstName')}
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder={t('firstName')}
+                  value={regFirstName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRegFirstName(val);
+                    setErrors((p) => ({
+                      ...p,
+                      firstName: val.trim() === '' || !nameRegex.test(val.trim())
+                    }));
+                  }}
+                  className={`w-full bg-blush/30 border rounded-xl px-4 py-2.5 text-sm text-charcoal placeholder:text-muted-warm/40 focus:outline-none transition-colors ${
+                    errors.firstName ? 'border-red-400 focus:border-red-400' : 'border-accent-border/40 focus:border-gold'
+                  }`}
+                />
+                {errors.firstName && (
+                  <p className="text-[10px] text-red-400 mt-1">{t('invalidNameError')}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-warm/80 block mb-1">
+                  {t('lastName')}
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder={t('lastName')}
+                  value={regLastName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRegLastName(val);
+                    setErrors((p) => ({
+                      ...p,
+                      lastName: val.trim() === '' || !nameRegex.test(val.trim())
+                    }));
+                  }}
+                  className={`w-full bg-blush/30 border rounded-xl px-4 py-2.5 text-sm text-charcoal placeholder:text-muted-warm/40 focus:outline-none transition-colors ${
+                    errors.lastName ? 'border-red-400 focus:border-red-400' : 'border-accent-border/40 focus:border-gold'
+                  }`}
+                />
+                {errors.lastName && (
+                  <p className="text-[10px] text-red-400 mt-1">{t('invalidNameError')}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isRegistering || !regFirstName.trim() || !regLastName.trim() || errors.firstName || errors.lastName}
+                className="w-full py-3 rounded-full gradient-gold text-white text-sm font-semibold shadow-elevated hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none mt-2"
+              >
+                {isRegistering 
+                  ? (language === 'tr' ? 'Kaydediliyor...' : 'Saving...') 
+                  : (language === 'tr' ? 'Katıl ve Gönder' : 'Join & Send')}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
