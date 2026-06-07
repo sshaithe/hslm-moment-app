@@ -501,6 +501,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
           public_url = await uploadMedia(upload.local_url, fileName, onProgress);
         } catch (err) {
           console.error('Error uploading upload file to Supabase storage:', err);
+          throw err;
         }
       }
 

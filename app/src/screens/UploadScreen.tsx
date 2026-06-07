@@ -13,7 +13,7 @@ import EmojiPicker from '@/components/shared/EmojiPicker';
 export default function UploadScreen() {
   const navigate = useNavigate();
   const { wedding, currentGuest: guest, createUpload } = useDatabase();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
   const [uploadType, setUploadType] = useState<UploadType>('photo');
   const [file, setFile] = useState<File | null>(null);
@@ -148,6 +148,18 @@ export default function UploadScreen() {
 
       recorder.onstop = () => {
         const videoBlob = new Blob(chunksRef.current, { type: recorder.mimeType || 'video/mp4' });
+        
+        if (videoBlob.size > 15 * 1024 * 1024) {
+          addToast(
+            language === 'tr'
+              ? 'Kaydedilen video çok büyük (Maksimum 15MB). Lütfen daha kısa bir video kaydedin.'
+              : 'Recorded video is too large (15MB limit). Please record a shorter video.',
+            'error'
+          );
+          stopCamera();
+          return;
+        }
+
         const extension = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
         const fileObj = new File([videoBlob], `capture_${Date.now()}.${extension}`, { type: videoBlob.type });
         setFile(fileObj);
@@ -236,6 +248,16 @@ export default function UploadScreen() {
     const f = e.target.files?.[0];
     if (!f) return;
     
+    if (uploadType === 'video' && f.size > 15 * 1024 * 1024) {
+      addToast(
+        language === 'tr'
+          ? 'Video dosyası çok büyük. Lütfen 15MB\'dan küçük bir video seçin.'
+          : 'Video file is too large. Please select a video under 15MB.',
+        'error'
+      );
+      return;
+    }
+    
     // Revoke previous preview URL to prevent memory leaks
     if (preview && preview.startsWith('blob:')) {
       URL.revokeObjectURL(preview);
@@ -251,10 +273,20 @@ export default function UploadScreen() {
     const f = e.dataTransfer.files?.[0];
     if (!f) return;
     
+    if (uploadType === 'video' && f.size > 15 * 1024 * 1024) {
+      addToast(
+        language === 'tr'
+          ? 'Video dosyası çok büyük. Lütfen 15MB\'dan küçük bir video seçin.'
+          : 'Video file is too large. Please select a video under 15MB.',
+        'error'
+      );
+      return;
+    }
+    
     setFile(f);
     const objectUrl = URL.createObjectURL(f);
     setPreview(objectUrl);
-  }, [preview]);
+  }, [preview, uploadType, language]);
 
   const handleSubmit = async () => {
     if (!guest && wedding.require_guest_name) {
