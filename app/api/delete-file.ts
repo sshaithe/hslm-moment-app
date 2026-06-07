@@ -64,8 +64,8 @@ export default async function handler(req: any, res: any) {
   try {
     const { filename, adminPassword, weddingId, uploadId } = req.body;
 
-    if (!filename || !weddingId || !uploadId) {
-      return res.status(400).json({ error: 'Missing required parameters (filename, weddingId, uploadId)' });
+    if (!weddingId || !uploadId) {
+      return res.status(400).json({ error: 'Missing required parameters (weddingId, uploadId)' });
     }
 
     // ─── AUTHENTICATION CHECK ───
@@ -85,14 +85,21 @@ export default async function handler(req: any, res: any) {
       return res.status(401).json({ error: 'Unauthorized: Invalid password' });
     }
 
-    // 1. Delete physical object from Backblaze B2
-    const command = new DeleteObjectCommand({
-      Bucket: process.env.S3_BUCKET_NAME || '',
-      Key: filename,
-    });
+    // 1. Delete physical object from Backblaze B2 (only if filename is provided)
+    if (filename) {
+      try {
+        const command = new DeleteObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME || '',
+          Key: filename,
+        });
 
-    await s3Client.send(command);
-    console.log(`Successfully deleted file from S3 Storage: ${filename}`);
+        await s3Client.send(command);
+        console.log(`Successfully deleted file from S3 Storage: ${filename}`);
+      } catch (s3Error) {
+        console.error(`Failed to delete S3 file ${filename}:`, s3Error);
+        // Continue to delete db record anyway so we don't leave orphaned rows in DB
+      }
+    }
 
     // 2. Delete database row from Supabase uploads table using Service Role client
     const { error: deleteDbError } = await supabase
@@ -102,7 +109,7 @@ export default async function handler(req: any, res: any) {
 
     if (deleteDbError) {
       console.error('Failed to delete upload row from Supabase:', deleteDbError);
-      return res.status(500).json({ error: 'S3 file deleted, but database row removal failed' });
+      return res.status(500).json({ error: 'Failed to remove database row' });
     }
 
     return res.status(200).json({ success: true });

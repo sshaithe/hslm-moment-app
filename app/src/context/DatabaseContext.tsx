@@ -595,29 +595,35 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     setUploads((prev) => prev.filter((u) => u.id !== id));
 
     if (isSupabase) {
-      if (upload && upload.public_url) {
-        try {
+      try {
+        let filename = undefined;
+        if (upload && upload.public_url) {
           const urlObj = new URL(upload.public_url);
           const pathName = decodeURIComponent(urlObj.pathname);
-          const filename = pathName.startsWith('/') ? pathName.substring(1) : pathName;
-          
-          const adminPassword = localStore.getAdminPassword() || '';
-          await fetch('/api/delete-file', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              filename, 
-              adminPassword,
-              weddingId: wedding.id,
-              uploadId: id
-            }),
-          });
-        } catch (err) {
-          console.error('Failed to delete media file and record from storage API:', err);
+          filename = pathName.startsWith('/') ? pathName.substring(1) : pathName;
+        }
+
+        const adminPassword = localStore.getAdminPassword() || '';
+        const response = await fetch('/api/delete-file', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            filename, 
+            adminPassword,
+            weddingId: wedding.id,
+            uploadId: id
+          }),
+        });
+
+        if (!response.ok) {
+          console.error('Failed to delete upload via delete-file API');
           return false;
         }
+      } catch (err) {
+        console.error('Failed to delete media file and record from storage API:', err);
+        return false;
       }
       return true;
     } else {
