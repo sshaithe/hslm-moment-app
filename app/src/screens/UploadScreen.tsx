@@ -12,7 +12,7 @@ import EmojiPicker from '@/components/shared/EmojiPicker';
 
 export default function UploadScreen() {
   const navigate = useNavigate();
-  const { wedding, currentGuest: guest, createUpload } = useDatabase();
+  const { wedding, currentGuest: guest, createUpload, uploads } = useDatabase();
   const { t, language } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
   const [uploadType, setUploadType] = useState<UploadType>('photo');
@@ -276,13 +276,13 @@ export default function UploadScreen() {
         return;
       }
 
-      // 3. Video Duration Validation (under 2 minutes / 120s)
+      // 3. Video Duration Validation (under 3 minutes / 180s)
       const duration = await checkVideoDuration(f);
-      if (duration > 120) {
+      if (duration > 180) {
         addToast(
           language === 'tr'
-            ? 'Lütfen 2 dakikadan kısa bir video seçin.'
-            : 'Please choose a video shorter than 2 minutes.',
+            ? 'Lütfen 3 dakikadan kısa bir video seçin.'
+            : 'Please choose a video shorter than 3 minutes.',
           'error'
         );
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -351,6 +351,11 @@ export default function UploadScreen() {
         setUploadProgress(progress);
       });
 
+      // Track upload ID on this device (for anonymous upload limits)
+      const myUploadedIds = JSON.parse(localStorage.getItem('vv_my_uploaded_ids') || '[]');
+      myUploadedIds.push(upload.id);
+      localStorage.setItem('vv_my_uploaded_ids', JSON.stringify(myUploadedIds));
+
       // Clear drafts on success
       localStorage.removeItem('vv_upload_caption');
       localStorage.removeItem('vv_upload_message_text');
@@ -371,7 +376,22 @@ export default function UploadScreen() {
     }
   };
 
-  const canSubmit = !isUploading && (uploadType === 'message' ? messageText.trim().length > 0 : (uploadType === 'video' ? file !== null : true));
+  // Video count check (10 videos limit)
+  const myUploadedIds: string[] = JSON.parse(localStorage.getItem('vv_my_uploaded_ids') || '[]');
+  const myVideos = uploads.filter((u) => {
+    if (u.type !== 'video') return false;
+    // Match registered guests
+    if (guest && u.guest_id === guest.guest_id) return true;
+    // Match device uploads for anonymous guest fallback
+    return myUploadedIds.includes(u.id);
+  });
+  const videoLimitReached = myVideos.length >= 10;
+
+  const canSubmit = !isUploading && (
+    uploadType === 'message'
+      ? messageText.trim().length > 0
+      : (uploadType === 'video' ? (file !== null && !videoLimitReached) : file !== null)
+  );
 
   const typeOptions: { type: UploadType; icon: typeof Camera; label: string }[] = [
     { type: 'photo', icon: Camera, label: t('photo') },
@@ -482,7 +502,7 @@ export default function UploadScreen() {
           </div>
 
           {/* Source Selector (Library vs. Live Camera) */}
-          {uploadType !== 'message' && !preview && (
+          {uploadType !== 'message' && !(uploadType === 'video' && videoLimitReached) && !preview && (
             <div className="px-5 mb-3 animate-fade-in">
               <div className="flex bg-blush/40 p-1 rounded-full border border-accent-border/30">
                 <button
@@ -526,6 +546,25 @@ export default function UploadScreen() {
                 />
                 <div className="absolute bottom-3 right-3">
                   <EmojiPicker onSelect={(emoji) => handleMessageChange(messageText + emoji)} />
+                </div>
+              </div>
+            ) : uploadType === 'video' && videoLimitReached ? (
+              <div className="w-full rounded-xl border border-gold/40 bg-blush/20 p-6 flex flex-col items-center justify-center text-center gap-4 animate-fade-in" style={{ aspectRatio: '4/3' }}>
+                <div className="w-12 h-12 rounded-full bg-blush flex items-center justify-center text-gold">
+                  <Film size={22} className="animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="font-heading text-base text-charcoal font-semibold mb-1">
+                    {language === 'tr' ? 'Video Sınırına Ulaşıldı' : 'Video Limit Reached'}
+                  </h4>
+                  <p className="text-xs text-muted-warm px-4 leading-relaxed">
+                    {language === 'tr'
+                      ? 'Paylaşım başına en fazla 10 video yükleyebilirsiniz. Yeni video eklemek için galeriden eski videolarınızı silebilirsiniz.'
+                      : 'You can upload a maximum of 10 videos. You can delete previous videos from the gallery to upload new ones.'}
+                  </p>
+                </div>
+                <div className="text-[11px] font-semibold text-gold bg-white px-3 py-1 rounded-full border border-gold/20 shadow-sm">
+                  {language === 'tr' ? 'Yüklenen: 10 / 10 Video' : 'Uploaded: 10 / 10 Videos'}
                 </div>
               </div>
             ) : (
@@ -624,9 +663,16 @@ export default function UploadScreen() {
                     )}
                   </div>
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-center px-6">
-                    <UploadCloud size={36} className="text-gold mb-3" strokeWidth={1.5} />
-                    <p className="text-sm text-muted-warm">{t('tapToChoose')}</p>
+                  <div className="w-full h-full flex flex-col items-center justify-center text-center px-6 gap-1">
+                    <UploadCloud size={36} className="text-gold mb-2" strokeWidth={1.5} />
+                    <p className="text-sm text-muted-warm font-medium">{t('tapToChoose')}</p>
+                    {uploadType === 'video' && (
+                      <p className="text-[11px] text-muted-warm/60">
+                        {language === 'tr' 
+                          ? `Yüklenen Video: ${myVideos.length} / 10`
+                          : `Videos Uploaded: ${myVideos.length} / 10`}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

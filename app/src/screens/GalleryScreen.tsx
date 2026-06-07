@@ -222,9 +222,8 @@ function MediaCard({ upload, formatTime, wedding }: { upload: Upload; formatTime
           <video
             src={mediaUrl || undefined}
             className="w-full h-auto block object-cover"
-            autoPlay
+            preload="metadata"
             muted
-            loop
             playsInline
           />
         ) : (

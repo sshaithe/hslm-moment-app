@@ -64,7 +64,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { filename, contentType, weddingId, fileSize } = req.body;
+    const { filename, contentType, weddingId, fileSize, guestId } = req.body;
 
     if (!filename || !contentType || !weddingId) {
       return res.status(400).json({ error: 'Missing required parameters (filename, contentType, weddingId)' });
@@ -103,6 +103,21 @@ export default async function handler(req: any, res: any) {
 
     if (wedding.uploads_paused) {
       return res.status(403).json({ error: 'Uploads are paused by the admin.' });
+    }
+
+    // ─── SERVER-SIDE VIDEO LIMIT CHECK ───
+    if (contentType.startsWith('video/') && guestId && guestId !== 'anonymous') {
+      const { count, error: countError } = await supabase
+        .from('uploads')
+        .select('*', { count: 'exact', head: true })
+        .eq('guest_id', guestId)
+        .eq('type', 'video');
+
+      if (countError) {
+        console.error('Error counting guest video uploads:', countError);
+      } else if (count !== null && count >= 10) {
+        return res.status(400).json({ error: 'You have reached the video upload limit of 10 videos.' });
+      }
     }
 
     const command = new PutObjectCommand({

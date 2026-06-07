@@ -48,7 +48,7 @@ create table if not exists public.uploads (
     wedding_id text references public.weddings(id) on delete cascade not null,
     guest_id uuid references public.guests(id) on delete set null,
     guest_name text not null,
-    type text check (type in ('photo', 'video', 'message')) not null,
+    type text check (type in ('photo', 'video', 'message', 'guestbook')) not null,
     local_url text, -- blob URL fallback
     storage_path text, -- file storage path in bucket
     public_url text, -- live file URL
@@ -58,6 +58,7 @@ create table if not exists public.uploads (
     is_hidden boolean default false not null,
     is_featured boolean default false not null,
     report_count integer default 0 not null,
+    file_size integer,
     created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

@@ -140,6 +140,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
           contentType: mimeType,
           weddingId: wedding.id,
           fileSize: blob.size, // Pass file size for server-side validation
+          guestId: currentGuest?.guest_id || 'anonymous',
         }),
       });
 
