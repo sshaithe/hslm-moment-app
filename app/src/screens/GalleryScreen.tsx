@@ -151,7 +151,7 @@ export default function GalleryScreen() {
 function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: string) => string }) {
   return (
     <div className="bg-white rounded-xl overflow-hidden shadow-card">
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-hidden bg-blush/10 min-h-[120px]">
         {upload.type === 'video' ? (
           <video
             src={upload.local_url || upload.public_url || undefined}
@@ -166,7 +166,6 @@ function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: str
             src={upload.local_url || upload.public_url || undefined}
             alt={upload.caption || ''}
             className="w-full h-auto block"
-            loading="lazy"
           />
         )}
         {upload.type === 'video' && (
