@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
@@ -32,7 +33,7 @@ if (!process.env.S3_BUCKET_NAME) {
 // Initialize the S3 client for generic S3-compatible storage (Backblaze B2, etc.)
 const s3Client = new S3Client({
   region: 'global',
-  endpoint: process.env.S3_ENDPOINT || 'https://s3.tebi.io',
+  endpoint: process.env.S3_ENDPOINT || 'https://s3.us-east-005.backblazeb2.com',
   credentials: {
     accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
@@ -41,6 +42,11 @@ const s3Client = new S3Client({
   requestChecksumCalculation: 'WHEN_REQUIRED',
   responseChecksumValidation: 'WHEN_REQUIRED',
 });
+
+// Initialize Supabase client
+const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function handler(req: any, res: any) {
   // CORS configuration to allow cross-origin requests
@@ -58,10 +64,33 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { filename, contentType } = req.body;
+    const { filename, contentType, weddingId } = req.body;
 
-    if (!filename || !contentType) {
-      return res.status(400).json({ error: 'Missing filename or contentType' });
+    if (!filename || !contentType || !weddingId) {
+      return res.status(400).json({ error: 'Missing required parameters (filename, contentType, weddingId)' });
+    }
+
+    // ─── FILE TYPE VALIDATION ───
+    const isImage = contentType.startsWith('image/');
+    const isVideo = contentType.startsWith('video/');
+    if (!isImage && !isVideo) {
+      return res.status(400).json({ error: 'Invalid file type. Only images and videos are allowed.' });
+    }
+
+    // ─── CHECK IF UPLOADS ARE PAUSED ───
+    const { data: wedding, error: dbError } = await supabase
+      .from('weddings')
+      .select('uploads_paused')
+      .eq('id', weddingId)
+      .single();
+
+    if (dbError || !wedding) {
+      console.error('Database error fetching wedding uploads_paused state:', dbError);
+      return res.status(500).json({ error: 'Failed to verify wedding upload settings.' });
+    }
+
+    if (wedding.uploads_paused) {
+      return res.status(403).json({ error: 'Uploads are currently paused by the administrator for this wedding.' });
     }
 
     const command = new PutObjectCommand({
@@ -71,7 +100,6 @@ export default async function handler(req: any, res: any) {
     });
 
     // Generate the presigned URL valid for 300 seconds (5 minutes)
-    // unhoistableHeaders prevents checksum headers from appearing in the presigned URL
     const uploadUrl = await getSignedUrl(s3Client, command, {
       expiresIn: 300,
       unhoistableHeaders: new Set(['x-amz-checksum-crc32', 'x-amz-sdk-checksum-algorithm']),

@@ -28,30 +28,71 @@ export default function UploadScreen() {
 
   const isPaused = wedding.uploads_paused;
 
-  const readFileAsDataURL = (f: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(f);
+  // Compress image client-side to save bandwidth/storage and prevent Safari memory crashes
+  const compressImage = (file: File, maxWidth = 1920, maxHeight = 1920, quality = 0.8): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(img.src);
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas context not available'));
+
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas compression failed'));
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = (err) => reject(err);
     });
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    
+    // Revoke previous preview URL to prevent memory leaks
+    if (preview && preview.startsWith('blob:')) {
+      URL.revokeObjectURL(preview);
+    }
+    
     setFile(f);
-    const dataUrl = await readFileAsDataURL(f);
-    setPreview(dataUrl);
+    const objectUrl = URL.createObjectURL(f);
+    setPreview(objectUrl);
   };
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files?.[0];
     if (!f) return;
+    
     setFile(f);
-    const dataUrl = await readFileAsDataURL(f);
-    setPreview(dataUrl);
-  }, []);
+    const objectUrl = URL.createObjectURL(f);
+    setPreview(objectUrl);
+  }, [preview]);
 
   const handleSubmit = async () => {
     if (!guest && wedding.require_guest_name) {
@@ -62,30 +103,45 @@ export default function UploadScreen() {
     const guestName = guest ? `${guest.first_name} ${guest.last_name}` : 'Anonymous';
     const guestId = guest?.guest_id || 'anonymous';
 
-    const upload = {
-      id: uuidv4(),
-      wedding_id: wedding.id,
-      guest_id: guestId,
-      guest_name: guestName,
-      type: uploadType,
-      local_url: preview || undefined,
-      caption: caption.trim() || undefined,
-      message_text: uploadType === 'message' ? messageText.trim() : undefined,
-      is_approved: !wedding.approve_before_display,
-      is_hidden: false,
-      is_featured: false,
-      report_count: 0,
-    };
-
     setIsUploading(true);
     setUploadProgress(0);
 
+    let localUploadUrl = preview || undefined;
+    let finalPreviewUrlToCleanup = '';
+
     try {
+      // If uploading a photo, compress it client-side first
+      if (uploadType === 'photo' && file) {
+        const compressedBlob = await compressImage(file);
+        localUploadUrl = URL.createObjectURL(compressedBlob);
+        finalPreviewUrlToCleanup = localUploadUrl;
+      }
+
+      const upload = {
+        id: uuidv4(),
+        wedding_id: wedding.id,
+        guest_id: guestId,
+        guest_name: guestName,
+        type: uploadType,
+        local_url: localUploadUrl,
+        caption: caption.trim() || undefined,
+        message_text: uploadType === 'message' ? messageText.trim() : undefined,
+        is_approved: !wedding.approve_before_display,
+        is_hidden: false,
+        is_featured: false,
+        report_count: 0,
+      };
+
       await createUpload(upload, (progress) => {
         setUploadProgress(progress);
       });
       setShowSuccess(true);
       addToast(t('uploadSuccessToast'), 'success');
+
+      // Cleanup object URL
+      if (finalPreviewUrlToCleanup) {
+        URL.revokeObjectURL(finalPreviewUrlToCleanup);
+      }
 
       setTimeout(() => {
         navigate('/gallery');
@@ -93,6 +149,11 @@ export default function UploadScreen() {
     } catch (err) {
       console.error('Upload error:', err);
       addToast('Upload failed. Please try again.', 'error');
+      
+      // Cleanup object URL on error
+      if (finalPreviewUrlToCleanup) {
+        URL.revokeObjectURL(finalPreviewUrlToCleanup);
+      }
     } finally {
       setIsUploading(false);
     }

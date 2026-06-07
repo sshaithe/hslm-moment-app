@@ -92,31 +92,31 @@ alter table public.uploads enable row level security;
 alter table public.reactions enable row level security;
 alter table public.comments enable row level security;
 
--- Create permissive policies for standard guest use (anyone can read, register, react, comment)
--- weddings policies
+-- Create secure policies for weddings (Read-only for public, update is done via admin API)
 create policy "Allow public read of weddings" on public.weddings for select using (true);
-create policy "Allow public update of weddings" on public.weddings for update using (true); -- simplify for prototype, admin settings will update this
 
--- guests policies
+-- guests policies (Allow read, insert, update)
 create policy "Allow public read of guests" on public.guests for select using (true);
 create policy "Allow public insert of guests" on public.guests for insert with check (true);
 create policy "Allow public update of guests" on public.guests for update using (true);
 
--- uploads policies
+-- uploads policies (Allow read and guest uploads; disable public deletions)
 create policy "Allow public read of uploads" on public.uploads for select using (true);
-create policy "Allow public insert of uploads" on public.uploads for insert with check (true);
-create policy "Allow public update of uploads" on public.uploads for update using (true);
-create policy "Allow public delete of uploads" on public.uploads for delete using (true);
+create policy "Allow public insert of uploads" on public.uploads for insert with check (
+  -- If moderation is required, guest uploads must be created as unapproved
+  (is_approved = false) OR 
+  (is_approved = true AND (select approve_before_display from public.weddings where id = wedding_id) = false)
+);
+create policy "Allow public update of uploads" on public.uploads for update using (true); -- allowed for reporting updates
 
--- reactions policies
+-- reactions policies (Allow read, insert, delete)
 create policy "Allow public read of reactions" on public.reactions for select using (true);
 create policy "Allow public insert of reactions" on public.reactions for insert with check (true);
 create policy "Allow public delete of reactions" on public.reactions for delete using (true);
 
--- comments policies
+-- comments policies (Allow read and write, disable public deletes)
 create policy "Allow public read of comments" on public.comments for select using (true);
 create policy "Allow public insert of comments" on public.comments for insert with check (true);
-create policy "Allow public delete of comments" on public.comments for delete using (true);
 
 -- ─── 8. DEFAULT SEED DATA ───
 -- Insert the default wedding demo project settings

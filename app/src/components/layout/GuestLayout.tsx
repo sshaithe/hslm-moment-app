@@ -3,17 +3,28 @@ import { Home, Upload, Image, MessageSquare, User } from 'lucide-react';
 import { getGuestSession } from '@/lib/localStore';
 import { useLanguage } from '@/i18n/LanguageContext';
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher';
+import { useDatabase } from '@/context/DatabaseContext';
 
 export default function GuestLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const guest = getGuestSession();
   const { t } = useLanguage();
+  const { wedding } = useDatabase();
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path === '/' || path.startsWith('/wedding/')) {
+      return location.pathname === '/' || location.pathname.startsWith('/wedding/');
+    }
+    return location.pathname === path;
+  };
 
   const navItems = [
-    { path: '/', icon: Home, label: t('liveGallery').split(' ')[0] || 'Home' },
+    { 
+      path: wedding?.slug ? `/wedding/${wedding.slug}` : '/', 
+      icon: Home, 
+      label: t('liveGallery').split(' ')[0] || 'Home' 
+    },
     { path: '/upload', icon: Upload, label: t('uploadMemories').split(' ').slice(-1)[0] || 'Upload' },
     { path: '/gallery', icon: Image, label: t('gallery') || 'Gallery' },
     { path: '/messages', icon: MessageSquare, label: t('messages') || 'Messages' },

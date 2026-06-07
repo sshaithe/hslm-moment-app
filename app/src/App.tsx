@@ -26,15 +26,13 @@ export default function App() {
       {/* Guest Routes */}
       <Route element={<GuestLayout />}>
         <Route path="/" element={<LandingScreen />} />
+        <Route path="/wedding/:slug" element={<LandingScreen />} />
         <Route path="/join" element={<JoinScreen />} />
         <Route path="/upload" element={<UploadScreen />} />
         <Route path="/gallery" element={<GalleryScreen />} />
         <Route path="/photo/:id" element={<PhotoDetailScreen />} />
         <Route path="/messages" element={<MessageWallScreen />} />
       </Route>
-
-      {/* Wedding slug route redirects to landing */}
-      <Route path="/wedding/:slug" element={<LandingScreen />} />
 
       {/* Admin Routes */}
       <Route path="/admin" element={<AdminLoginScreen />} />

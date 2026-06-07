@@ -90,6 +90,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           filename: fileName,
           contentType: mimeType,
+          weddingId: wedding.id,
         }),
       });
 
@@ -146,32 +147,75 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       try {
         setLoading(true);
         
-        // Load settings
-        const { data: wData } = await supabase!
-          .from('weddings')
-          .select('*')
-          .eq('id', 'wedding-demo-001')
-          .single();
-        if (wData) setWedding(wData);
+        // Resolve slug dynamically from URL or localStorage
+        let resolvedSlug = '';
+        const pathParts = window.location.pathname.split('/');
+        const wIndex = pathParts.indexOf('wedding');
+        if (wIndex !== -1 && pathParts[wIndex + 1]) {
+          resolvedSlug = pathParts[wIndex + 1];
+        } else {
+          resolvedSlug = localStorage.getItem('vv_current_wedding_slug') || '';
+        }
+
+        let wData = null;
+        if (resolvedSlug) {
+          const { data } = await supabase!
+            .from('weddings')
+            .select('*')
+            .eq('slug', resolvedSlug)
+            .single();
+          wData = data;
+        }
+
+        if (!wData) {
+          const { data } = await supabase!
+            .from('weddings')
+            .select('*')
+            .eq('id', 'wedding-demo-001')
+            .single();
+          wData = data;
+        }
+
+        if (wData) {
+          setWedding(wData);
+          localStorage.setItem('vv_current_wedding_slug', wData.slug);
+        } else {
+          throw new Error('Failed to load wedding settings');
+        }
 
         // Load uploads
         const { data: uData } = await supabase!
           .from('uploads')
           .select('*')
+          .eq('wedding_id', wData.id)
           .order('created_at', { ascending: false });
         if (uData) setUploads(uData);
 
         // Load guests
-        const { data: gData } = await supabase!.from('guests').select('*');
+        const { data: gData } = await supabase!
+          .from('guests')
+          .select('*')
+          .eq('wedding_id', wData.id);
         if (gData) setGuests(gData);
 
-        // Load comments
-        const { data: cData } = await supabase!.from('comments').select('*');
-        if (cData) setComments(cData);
+        // Load comments and reactions for this wedding's uploads only
+        const uploadIds = uData ? uData.map((u) => u.id) : [];
+        if (uploadIds.length > 0) {
+          const { data: cData } = await supabase!
+            .from('comments')
+            .select('*')
+            .in('upload_id', uploadIds);
+          if (cData) setComments(cData);
 
-        // Load reactions
-        const { data: rData } = await supabase!.from('reactions').select('*');
-        if (rData) setReactions(rData);
+          const { data: rData } = await supabase!
+            .from('reactions')
+            .select('*')
+            .in('upload_id', uploadIds);
+          if (rData) setReactions(rData);
+        } else {
+          setComments([]);
+          setReactions([]);
+        }
       } catch (err) {
         console.error('Error loading Supabase data:', err);
       } finally {
@@ -182,59 +226,95 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     loadData();
 
     // ─── REAL-TIME SUBSCRIPTION (SUPABASE ONLY) ───
-    const channel = supabase!
-      .channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'weddings' }, (payload) => {
-        if (payload.eventType === 'UPDATE') {
-          setWedding(payload.new as Wedding);
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'uploads' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setUploads((prev) => {
-            if (prev.some((u) => u.id === payload.new.id)) return prev;
-            return [payload.new as Upload, ...prev];
-          });
-        } else if (payload.eventType === 'UPDATE') {
-          setUploads((prev) => prev.map((u) => (u.id === payload.new.id ? (payload.new as Upload) : u)));
-        } else if (payload.eventType === 'DELETE') {
-          setUploads((prev) => prev.filter((u) => u.id !== payload.old.id));
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'guests' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setGuests((prev) => {
-            if (prev.some((g) => g.id === payload.new.id)) return prev;
-            return [...prev, payload.new as Guest];
-          });
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setComments((prev) => {
-            if (prev.some((c) => c.id === payload.new.id)) return prev;
-            return [...prev, payload.new as Comment];
-          });
-        } else if (payload.eventType === 'DELETE') {
-          setComments((prev) => prev.filter((c) => c.id !== payload.old.id));
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setReactions((prev) => {
-            if (prev.some((r) => r.id === payload.new.id)) return prev;
-            return [...prev, payload.new as Reaction];
-          });
-        } else if (payload.eventType === 'DELETE') {
-          setReactions((prev) => prev.filter((r) => r.id !== payload.old.id));
-        }
-      })
-      .subscribe();
+    const currentWeddingSlug = localStorage.getItem('vv_current_wedding_slug');
+    let weddingId = wedding?.id || 'wedding-demo-001';
+
+    const setupSubscriptions = async () => {
+      let resolvedId = weddingId;
+      if (!wedding?.id && currentWeddingSlug) {
+        const { data } = await supabase!
+          .from('weddings')
+          .select('id')
+          .eq('slug', currentWeddingSlug)
+          .single();
+        if (data) resolvedId = data.id;
+      }
+
+      const channel = supabase!
+        .channel('schema-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'weddings', filter: `id=eq.${resolvedId}` }, (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setWedding(payload.new as Wedding);
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'uploads', filter: `wedding_id=eq.${resolvedId}` }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setUploads((prev) => {
+              if (prev.some((u) => u.id === payload.new.id)) return prev;
+              return [payload.new as Upload, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setUploads((prev) => prev.map((u) => (u.id === payload.new.id ? (payload.new as Upload) : u)));
+          } else if (payload.eventType === 'DELETE') {
+            setUploads((prev) => prev.filter((u) => u.id !== payload.old.id));
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'guests', filter: `wedding_id=eq.${resolvedId}` }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setGuests((prev) => {
+              if (prev.some((g) => g.id === payload.new.id)) return prev;
+              return [...prev, payload.new as Guest];
+            });
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setUploads((currentUploads) => {
+              const belongsToOurWedding = currentUploads.some((u) => u.id === payload.new.upload_id);
+              if (belongsToOurWedding) {
+                setComments((prev) => {
+                  if (prev.some((c) => c.id === payload.new.id)) return prev;
+                  return [...prev, payload.new as Comment];
+                });
+              }
+              return currentUploads;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            setComments((prev) => prev.filter((c) => c.id !== payload.old.id));
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setUploads((currentUploads) => {
+              const belongsToOurWedding = currentUploads.some((u) => u.id === payload.new.upload_id);
+              if (belongsToOurWedding) {
+                setReactions((prev) => {
+                  if (prev.some((r) => r.id === payload.new.id)) return prev;
+                  return [...prev, payload.new as Reaction];
+                });
+              }
+              return currentUploads;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            setReactions((prev) => prev.filter((r) => r.id !== payload.old.id));
+          }
+        })
+        .subscribe();
+
+      return channel;
+    };
+
+    let activeChannel: any = null;
+    setupSubscriptions().then((ch) => {
+      activeChannel = ch;
+    });
 
     return () => {
-      supabase!.removeChannel(channel);
+      if (activeChannel) {
+        supabase!.removeChannel(activeChannel);
+      }
     };
-  }, [isSupabase]);
+  }, [isSupabase, wedding?.id]);
 
   // ─── MUTATIONS & ACTIONS ───
 
@@ -266,10 +346,19 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         setWedding((prev) => ({ ...prev, ...customUpdates }));
       }
 
-      await supabase!
-        .from('weddings')
-        .update(customUpdates)
-        .eq('id', wedding.id);
+      // Call secure serverless update-settings API
+      const adminPassword = localStore.getAdminPassword() || '';
+      await fetch('/api/update-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          weddingId: wedding.id,
+          updates: customUpdates,
+          adminPassword,
+        }),
+      });
     }
   };
 
@@ -417,18 +506,46 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     setUploads((prev) => prev.map((u) => (u.id === id ? { ...u, ...updates } : u)));
 
     if (isSupabase) {
-      const { data, error } = await supabase!
-        .from('uploads')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+      // Determine if this is an admin moderation action or simple guest report count increment
+      const isAdminKeys = 'is_approved' in updates || 'is_featured' in updates || ('is_hidden' in updates && !('report_count' in updates));
 
-      if (error) {
-        console.error('Error updating upload in Supabase:', error);
-        return null;
+      if (isAdminKeys) {
+        const adminPassword = localStore.getAdminPassword() || '';
+        const response = await fetch('/api/update-upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            uploadId: id,
+            weddingId: wedding.id,
+            updates,
+            adminPassword,
+          }),
+        });
+
+        if (!response.ok) {
+          console.error('Failed to update upload via Admin API');
+          return null;
+        }
+
+        const data = await response.json();
+        return data.upload;
+      } else {
+        // Guest reporting flow remains directly through client using RLS
+        const { data, error } = await supabase!
+          .from('uploads')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error updating upload in Supabase:', error);
+          return null;
+        }
+        return data as Upload;
       }
-      return data as Upload;
     } else {
       const updated = localStore.updateUpload(id, updates);
       return updated;
@@ -440,7 +557,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     setUploads((prev) => prev.filter((u) => u.id !== id));
 
     if (isSupabase) {
-      if (upload && upload.public_url && (upload.type === 'photo' || upload.type === 'video')) {
+      if (upload && upload.public_url) {
         try {
           const urlObj = new URL(upload.public_url);
           const pathName = decodeURIComponent(urlObj.pathname);
@@ -452,17 +569,17 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ filename, adminPassword }),
+            body: JSON.stringify({ 
+              filename, 
+              adminPassword,
+              weddingId: wedding.id,
+              uploadId: id
+            }),
           });
         } catch (err) {
-          console.error('Failed to delete media file from storage:', err);
+          console.error('Failed to delete media file and record from storage API:', err);
+          return false;
         }
-      }
-
-      const { error } = await supabase!.from('uploads').delete().eq('id', id);
-      if (error) {
-        console.error('Error deleting upload in Supabase:', error);
-        return false;
       }
       return true;
     } else {

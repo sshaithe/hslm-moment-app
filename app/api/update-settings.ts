@@ -1,10 +1,9 @@
-import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
 // Fallback to load env variables from .env.local in development if they are not loaded by the host
-if (!process.env.S3_BUCKET_NAME) {
+if (!process.env.VITE_SUPABASE_URL) {
   try {
     const envLocalPath = path.resolve(process.cwd(), '.env.local');
     if (fs.existsSync(envLocalPath)) {
@@ -16,7 +15,6 @@ if (!process.env.S3_BUCKET_NAME) {
         if (index !== -1) {
           const key = trimmed.substring(0, index).trim();
           let value = trimmed.substring(index + 1).trim();
-          // Remove wrapping quotes if present
           if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
             value = value.substring(1, value.length - 1);
           }
@@ -28,18 +26,6 @@ if (!process.env.S3_BUCKET_NAME) {
     console.error('Failed to load .env.local fallback:', e);
   }
 }
-
-// Initialize the S3 client for generic S3-compatible storage
-const s3Client = new S3Client({
-  region: 'global',
-  endpoint: process.env.S3_ENDPOINT || 'https://s3.us-east-005.backblazeb2.com',
-  credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
-  },
-  requestChecksumCalculation: 'WHEN_REQUIRED',
-  responseChecksumValidation: 'WHEN_REQUIRED',
-});
 
 // Initialize Supabase client with Service Role Key to bypass RLS securely
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
@@ -62,52 +48,51 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { filename, adminPassword, weddingId, uploadId } = req.body;
+    const { weddingId, updates, adminPassword } = req.body;
 
-    if (!filename || !weddingId || !uploadId) {
-      return res.status(400).json({ error: 'Missing required parameters (filename, weddingId, uploadId)' });
+    if (!weddingId || !updates || !adminPassword) {
+      return res.status(400).json({ error: 'Missing required parameters (weddingId, updates, adminPassword)' });
     }
 
     // ─── AUTHENTICATION CHECK ───
-    const { data, error: dbError } = await supabase
+    const { data: wedding, error: dbError } = await supabase
       .from('weddings')
       .select('admin_password_hash')
       .eq('id', weddingId)
       .single();
 
-    if (dbError || !data) {
+    if (dbError || !wedding) {
       console.error('Database error fetching wedding admin password:', dbError);
-      return res.status(500).json({ error: 'Failed to authorize delete operation' });
+      return res.status(500).json({ error: 'Failed to authorize update settings operation' });
     }
 
-    const savedHash = data.admin_password_hash || '';
+    const savedHash = wedding.admin_password_hash || '';
     if (adminPassword !== savedHash) {
       return res.status(401).json({ error: 'Unauthorized: Invalid password' });
     }
 
-    // 1. Delete physical object from Backblaze B2
-    const command = new DeleteObjectCommand({
-      Bucket: process.env.S3_BUCKET_NAME || '',
-      Key: filename,
-    });
+    // Prevent direct modifications to critical system fields like id and admin_password_hash
+    const safeUpdates = { ...updates };
+    delete safeUpdates.id;
+    delete safeUpdates.admin_password_hash;
+    delete safeUpdates.created_at;
 
-    await s3Client.send(command);
-    console.log(`Successfully deleted file from S3 Storage: ${filename}`);
+    // Update settings in Supabase using the Service Role client
+    const { data, error: updateError } = await supabase
+      .from('weddings')
+      .update(safeUpdates)
+      .eq('id', weddingId)
+      .select()
+      .single();
 
-    // 2. Delete database row from Supabase uploads table using Service Role client
-    const { error: deleteDbError } = await supabase
-      .from('uploads')
-      .delete()
-      .eq('id', uploadId);
-
-    if (deleteDbError) {
-      console.error('Failed to delete upload row from Supabase:', deleteDbError);
-      return res.status(500).json({ error: 'S3 file deleted, but database row removal failed' });
+    if (updateError) {
+      console.error('Failed to update settings in Supabase:', updateError);
+      return res.status(500).json({ error: 'Failed to update wedding settings database row' });
     }
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, wedding: data });
   } catch (error: any) {
-    console.error('Error deleting file from S3 Storage:', error);
+    console.error('Error updating wedding settings:', error);
     return res.status(500).json({ error: error.message || 'Internal server error' });
   }
 }
