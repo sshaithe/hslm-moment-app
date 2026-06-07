@@ -508,7 +508,14 @@ export default function UploadScreen() {
                     {uploadType === 'photo' ? (
                       <img src={preview} alt="Preview" className="w-full h-full object-cover rounded-xl" />
                     ) : (
-                      <video src={preview} className="w-full h-full object-cover rounded-xl" controls />
+                      <video 
+                        key={preview}
+                        src={preview} 
+                        className="w-full h-full object-cover rounded-xl" 
+                        controls 
+                        playsInline
+                        preload="auto"
+                      />
                     )}
                     <button
                       onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }}
