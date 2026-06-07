@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { X, Download, Flag, Send } from 'lucide-react';
+import { X, Download, Flag, Send, RefreshCw } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import ReactionBar from '@/components/shared/ReactionBar';
@@ -12,11 +12,61 @@ import { getMediaUrl } from '@/lib/mediaHelper';
 export default function PhotoDetailScreen() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { wedding, currentGuest: guest, uploads, comments: allComments, submitComment, modifyUpload, registerGuest } = useDatabase();
+  const { wedding, currentGuest: guest, uploads, comments: allComments, submitComment, modifyUpload, registerGuest, refreshCommentsAndReactions, setComments, setReactions, isSupabase } = useDatabase();
   const { t, language } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
   const [commentText, setCommentText] = useState('');
   const [showReportConfirm, setShowReportConfirm] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Load comment draft from localStorage
+  useEffect(() => {
+    if (id) {
+      const savedDraft = localStorage.getItem(`vv_comment_draft_${id}`);
+      if (savedDraft) {
+        setCommentText(savedDraft);
+      }
+    }
+  }, [id]);
+
+  // Visibility-aware 30s polling + mount/unmount cleanup
+  useEffect(() => {
+    if (!isSupabase || !id) return;
+
+    // Fetch immediately on mount
+    refreshCommentsAndReactions([id]);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshCommentsAndReactions([id]);
+      }
+    }, 30 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      // Clean up comments and reactions for this photo from global state on unmount
+      setComments((prev) => prev.filter((c) => c.upload_id !== id));
+      setReactions((prev) => prev.filter((r) => r.upload_id !== id));
+    };
+  }, [id, isSupabase]);
+
+  const handleRefresh = async () => {
+    if (!id) return;
+    setIsRefreshing(true);
+    await refreshCommentsAndReactions([id]);
+    setIsRefreshing(false);
+  };
+
+  const handleCommentChange = (text: string) => {
+    setCommentText(text);
+    if (id) {
+      if (text) {
+        localStorage.setItem(`vv_comment_draft_${id}`, text);
+      } else {
+        localStorage.removeItem(`vv_comment_draft_${id}`);
+      }
+    }
+  };
 
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [regFirstName, setRegFirstName] = useState('');
@@ -54,6 +104,7 @@ export default function PhotoDetailScreen() {
     const guestName = `${guest.first_name} ${guest.last_name}`;
     await submitComment(upload.id, guest.guest_id, guestName, commentText.trim());
     setCommentText('');
+    localStorage.removeItem(`vv_comment_draft_${upload.id}`);
   };
 
   const handleRegisterAndComment = async (e: React.FormEvent) => {
@@ -68,6 +119,7 @@ export default function PhotoDetailScreen() {
       await submitComment(upload.id, newGuest.id, guestName, commentText.trim());
       
       setCommentText('');
+      localStorage.removeItem(`vv_comment_draft_${upload.id}`);
       setShowRegisterModal(false);
       setRegFirstName('');
       setRegLastName('');
@@ -175,9 +227,21 @@ export default function PhotoDetailScreen() {
         {/* Comments */}
         {wedding.allow_comments && (
           <div className="border-t border-accent-border/30 pt-4">
-            <h4 className="text-sm font-medium text-charcoal mb-3">
-              {t('commentsCount')} ({comments.length})
-            </h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-medium text-charcoal">
+                {t('commentsCount')} ({comments.length})
+              </h4>
+              {isSupabase && (
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="flex items-center gap-1 text-xs text-muted-warm hover:text-charcoal transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+                  <span>{isRefreshing ? 'Loading...' : 'Refresh'}</span>
+                </button>
+              )}
+            </div>
 
             {comments.length === 0 ? (
               <p className="text-xs text-muted-warm/60 mb-4">
@@ -210,12 +274,12 @@ export default function PhotoDetailScreen() {
                 <input
                   type="text"
                   value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
+                  onChange={(e) => handleCommentChange(e.target.value)}
                   placeholder={t('addComment')}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
                   className="flex-1 bg-transparent text-sm text-charcoal placeholder:text-muted-warm/50 focus:outline-none"
                 />
-                <EmojiPicker onSelect={(emoji) => setCommentText((prev) => prev + emoji)} />
+                <EmojiPicker onSelect={(emoji) => handleCommentChange(commentText + emoji)} />
               </div>
               <button
                 onClick={handleAddComment}

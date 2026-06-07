@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, PenLine, Video, Quote } from 'lucide-react';
+import { Heart, PenLine, Video, Quote, RefreshCw } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -10,11 +10,51 @@ import EmojiPicker from '@/components/shared/EmojiPicker';
 
 export default function MessageWallScreen() {
   const navigate = useNavigate();
-  const { wedding, currentGuest: guest, uploads, createUpload, reactions } = useDatabase();
+  const { wedding, currentGuest: guest, uploads, createUpload, reactions, refreshUploads, refreshReactions, isSupabase } = useDatabase();
   const { t, language } = useLanguage();
   const [showComposer, setShowComposer] = useState(false);
   const [messageText, setMessageText] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
+  // Restore draft on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('vv_message_wall_text');
+    if (saved) {
+      setMessageText(saved);
+      setShowComposer(true);
+    }
+  }, []);
+
+  const handleMessageChange = (val: string) => {
+    setMessageText(val);
+    localStorage.setItem('vv_message_wall_text', val);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([refreshUploads(), refreshReactions()]);
+    setLastUpdated(new Date());
+    setIsRefreshing(false);
+  };
+
+  // Visibility-aware 5-minute polling + cleanup
+  useEffect(() => {
+    if (!isSupabase) return;
+
+    // Load reactions for the popular messages
+    handleRefresh();
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshUploads();
+        refreshReactions();
+        setLastUpdated(new Date());
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [isSupabase]);
   const messages = uploads.filter((u) => u.type === 'message' && !u.is_hidden && (!wedding.approve_before_display || u.is_approved));
 
   const handleSubmit = async () => {
@@ -37,13 +77,27 @@ export default function MessageWallScreen() {
     });
 
     setMessageText('');
+    localStorage.removeItem('vv_message_wall_text');
     setShowComposer(false);
   };
 
   return (
     <div className="min-h-screen bg-ivory pb-20">
       {/* Header */}
-      <div className="text-center pt-6 pb-4 px-6">
+      <div className="text-center pt-6 pb-4 px-6 relative">
+        {isSupabase && (
+          <div className="absolute top-4 right-4 flex items-center gap-1 text-[10px] text-muted-warm font-medium">
+            <span>Updated: {lastUpdated.toLocaleTimeString(language === 'tr' ? 'tr-TR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-1 hover:bg-blush rounded transition-colors disabled:opacity-50 flex items-center justify-center"
+              title="Refresh messages"
+            >
+              <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        )}
         <p className="text-xs font-semibold uppercase tracking-[2px] text-gold mb-2">{t('weddingWishes')}</p>
         <h1 className="font-heading text-3xl text-charcoal italic">{t('memoryWall')}</h1>
         <GoldDivider width="w-12" className="my-3" />
@@ -73,13 +127,13 @@ export default function MessageWallScreen() {
         <div className="mx-5 mb-6 bg-white rounded-2xl p-4 shadow-card animate-slide-up">
           <textarea
             value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
+            onChange={(e) => handleMessageChange(e.target.value)}
             placeholder={t('writeWishes')}
             rows={4}
             className="w-full bg-blush/30 rounded-xl p-3 text-sm text-charcoal placeholder:text-muted-warm/50 focus:outline-none focus:ring-2 focus:ring-gold/30 resize-none"
           />
           <div className="flex items-center justify-between mt-2">
-            <EmojiPicker onSelect={(emoji) => setMessageText((prev) => prev + emoji)} />
+            <EmojiPicker onSelect={(emoji) => handleMessageChange(messageText + emoji)} />
             <div className="flex gap-2">
               <button
                 onClick={() => setShowComposer(false)}

@@ -1,16 +1,43 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Mail } from 'lucide-react';
+import { Plus, Mail, RefreshCw, Loader2 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
-import type { GalleryTab, Upload } from '@/lib/types';
+import type { GalleryTab, Upload, Wedding } from '@/lib/types';
 import { getMediaUrl } from '@/lib/mediaHelper';
 
 export default function GalleryScreen() {
   const navigate = useNavigate();
-  const { wedding, uploads, reactions } = useDatabase();
+  const { wedding, uploads, reactions, refreshUploads, refreshWeddingSettings, isSupabase } = useDatabase();
   const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<GalleryTab>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([refreshUploads(), refreshWeddingSettings()]);
+    setLastUpdated(new Date());
+    setIsRefreshing(false);
+  };
+
+  // Visibility-aware 5-minute polling + mount/unmount cleanup
+  useEffect(() => {
+    if (!isSupabase) return;
+
+    // Refresh immediately on mount to ensure fresh state
+    handleRefresh();
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshUploads();
+        refreshWeddingSettings();
+        setLastUpdated(new Date());
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [isSupabase]);
 
   const tabs: { key: GalleryTab; label: string }[] = [
     { key: 'all', label: t('all') },
@@ -75,9 +102,24 @@ export default function GalleryScreen() {
       <div className="sticky top-0 z-40 bg-ivory/95 backdrop-blur-sm border-b border-accent-border/30">
         <div className="flex items-center justify-between px-4 py-3">
           <h1 className="font-heading text-xl text-charcoal">{t('liveGallery')}</h1>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse-live" />
-            <span className="text-xs font-semibold text-green-600 tracking-wider">{t('live')}</span>
+          <div className="flex items-center gap-3">
+            {isSupabase && (
+              <div className="flex items-center gap-1 text-[10px] text-muted-warm font-medium">
+                <span>Updated: {lastUpdated.toLocaleTimeString(language === 'tr' ? 'tr-TR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="p-1 hover:bg-blush rounded transition-colors disabled:opacity-50 flex items-center justify-center"
+                  title="Refresh gallery"
+                >
+                  <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse-live" />
+              <span className="text-xs font-semibold text-green-600 tracking-wider">{t('live')}</span>
+            </div>
           </div>
         </div>
 
@@ -129,7 +171,7 @@ export default function GalleryScreen() {
                   {upload.type === 'message' ? (
                     <MessageCard upload={upload} />
                   ) : (
-                    <MediaCard upload={upload} formatTime={formatTime} />
+                    <MediaCard upload={upload} formatTime={formatTime} wedding={wedding} />
                   )}
                 </button>
               </div>
@@ -149,13 +191,36 @@ export default function GalleryScreen() {
   );
 }
 
-function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: string) => string }) {
+function MediaCard({ upload, formatTime, wedding }: { upload: Upload; formatTime: (d: string) => string; wedding: Wedding }) {
+  const mediaUrl = getMediaUrl(upload.local_url || upload.public_url);
+  const isUploading = !mediaUrl && upload.type === 'video';
+  const placeholderUrl = wedding.upload_placeholder_image ? getMediaUrl(wedding.upload_placeholder_image) : null;
+
   return (
     <div className="bg-white rounded-xl overflow-hidden shadow-card">
       <div className="relative overflow-hidden bg-blush/10 min-h-[120px]">
-        {upload.type === 'video' ? (
+        {isUploading && placeholderUrl ? (
+          // Show admin-configured placeholder with spinner
+          <>
+            <img
+              src={placeholderUrl || undefined}
+              alt="Uploading..."
+              className="w-full h-auto block object-cover opacity-80"
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+              <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
+                <Loader2 size={20} className="text-gold animate-spin" />
+              </div>
+            </div>
+          </>
+        ) : isUploading ? (
+          // Generic spinner if no placeholder configured
+          <div className="w-full flex items-center justify-center" style={{ minHeight: 120 }}>
+            <Loader2 size={24} className="text-gold animate-spin" />
+          </div>
+        ) : upload.type === 'video' ? (
           <video
-            src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
+            src={mediaUrl || undefined}
             className="w-full h-auto block object-cover"
             autoPlay
             muted
@@ -164,12 +229,12 @@ function MediaCard({ upload, formatTime }: { upload: Upload; formatTime: (d: str
           />
         ) : (
           <img
-            src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
+            src={mediaUrl || undefined}
             alt={upload.caption || ''}
             className="w-full h-auto block"
           />
         )}
-        {upload.type === 'video' && (
+        {upload.type === 'video' && !isUploading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/20">
             <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
               <div className="w-0 h-0 border-l-[14px] border-l-charcoal border-t-[9px] border-t-transparent border-b-[9px] border-b-transparent ml-1" />

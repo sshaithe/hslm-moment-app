@@ -12,5 +12,20 @@ export const isSupabaseConfigured = !!(
 );
 
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        // Guests are anonymous — no need for persistent sessions or token refresh.
+        // Without this, Supabase JS opens background auth polling connections even
+        // when nobody is using the app.
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      realtime: {
+        params: {
+          // Limit Realtime reconnection rate to avoid excessive connection spikes
+          eventsPerSecond: 10,
+        },
+      },
+    })
   : null;

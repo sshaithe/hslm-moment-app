@@ -167,4 +167,33 @@ export const tr = {
   unbanConfirm: 'Bu misafirin askı durumunu kaldırmak istediğinize emin misiniz?',
   joinedAt: 'Katılım Tarihi',
   invalidNameError: 'İsim sadece harflerden oluşabilir.',
+
+  // Guest Book
+  guestBook: 'Misafir Defteri',
+  guestBookSubtitle: 'ANILARINIZI BİRLİKTE YAŞAYALIM',
+  guestBookEntries: '{{count}} mesaj',
+  signGuestBook: 'Defteri İmzala',
+  leaveYourMark: 'İzini Bırak',
+  yourSignature: 'İmzan veya Çizimin',
+  yourWish: 'Dilek Mesajın',
+  optionalPhoto: 'İsteğe Bağlı Fotoğraf',
+  addPhoto: 'Fotoğraf Ekle',
+  signTheBook: 'Defteri İmzala',
+  guestBookEmpty: 'Henüz misafir defteri girişi yok... İlk imzayı sen at!',
+  guestBookAdded: 'Mesajınız defterimize eklendi! 🎉',
+  guestBookError: 'Gönderilemedi. Lütfen tekrar deneyin.',
+  guestBookNavLabel: 'Defter',
+  drawHint: 'İmzanı veya küçük bir çizimini buraya bırak…',
+  eraser: 'Silgi',
+
+  // Admin — PDF Export
+  guestBookPdf: 'Misafir Defteri PDF',
+  guestBookPdfEmpty: 'Henüz dışa aktarılacak misafir defteri girişi yok.',
+  guestBookPdfError: 'PDF oluşturulamadı. Lütfen tekrar deneyin.',
+  pdfKeepsakeFrom: 'Güzel Bir Hatıra',
+  pdfHeartfeltEntries: '{{count}} içten mesaj',
+
+  // Settings — Upload Placeholder
+  uploadPlaceholderLabel: '⏳ Yükleme Bekleme Görseli',
+  uploadPlaceholderDesc: 'Video yüklenirken gösterilecek yer tutucu görsel',
 } as const;

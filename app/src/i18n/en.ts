@@ -168,4 +168,33 @@ export const en = {
   unbanConfirm: 'Are you sure you want to lift the suspension for this guest?',
   joinedAt: 'Joined At',
   invalidNameError: 'Name can only contain letters.',
+
+  // Guest Book
+  guestBook: 'Guest Book',
+  guestBookSubtitle: 'Share Your Love',
+  guestBookEntries: '{{count}} entries',
+  signGuestBook: 'Sign the Guest Book',
+  leaveYourMark: 'Leave Your Mark',
+  yourSignature: 'Your Signature or Drawing',
+  yourWish: 'Your Wish',
+  optionalPhoto: 'Optional Photo',
+  addPhoto: 'Add a Photo',
+  signTheBook: 'Sign the Book',
+  guestBookEmpty: 'No guest book entries yet... Be the first to sign!',
+  guestBookAdded: 'Your message was added to the guest book! 🎉',
+  guestBookError: 'Could not submit. Please try again.',
+  guestBookNavLabel: 'Book',
+  drawHint: 'Draw your signature or a small sketch here…',
+  eraser: 'Eraser',
+
+  // Admin — PDF Export
+  guestBookPdf: 'Guest Book PDF',
+  guestBookPdfEmpty: 'No guest book entries to export yet.',
+  guestBookPdfError: 'Failed to generate PDF. Please try again.',
+  pdfKeepsakeFrom: 'A Keepsake From',
+  pdfHeartfeltEntries: '{{count}} heartfelt entries',
+
+  // Settings — Upload Placeholder
+  uploadPlaceholderLabel: '⏳ Upload Placeholder Image',
+  uploadPlaceholderDesc: 'Shown on video cards while a video is still uploading',
 } as const;

@@ -16,6 +16,7 @@ import QRScreen from '@/screens/QRScreen';
 import SlideshowScreen from '@/screens/SlideshowScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
 import AdminGuestsScreen from '@/screens/AdminGuestsScreen';
+import GuestBookScreen from '@/screens/GuestBookScreen';
 
 export default function App() {
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/gallery" element={<GalleryScreen />} />
         <Route path="/photo/:id" element={<PhotoDetailScreen />} />
         <Route path="/messages" element={<MessageWallScreen />} />
+        <Route path="/guestbook" element={<GuestBookScreen />} />
       </Route>
 
       {/* Admin Routes */}

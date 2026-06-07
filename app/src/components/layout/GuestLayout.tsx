@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Home, Upload, Image, MessageSquare, User } from 'lucide-react';
+import { Home, Upload, Image, MessageSquare, User, BookOpen } from 'lucide-react';
 import { getGuestSession } from '@/lib/localStore';
 import { useLanguage } from '@/i18n/LanguageContext';
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher';
@@ -46,6 +46,7 @@ export default function GuestLayout() {
     { path: '/upload', icon: Upload, label: t('uploadMemories').split(' ').slice(-1)[0] || 'Upload' },
     { path: '/gallery', icon: Image, label: t('gallery') || 'Gallery' },
     { path: '/messages', icon: MessageSquare, label: t('messages') || 'Messages' },
+    { path: '/guestbook', icon: BookOpen, label: t('guestBookNavLabel') },
   ];
 
   return (

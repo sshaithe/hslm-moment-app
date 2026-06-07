@@ -5,10 +5,53 @@ import { useDatabase } from '@/context/DatabaseContext';
 import Logo from '@/components/shared/Logo';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { getMediaUrl } from '@/lib/mediaHelper';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function SlideshowScreen() {
   const navigate = useNavigate();
-  const { wedding, uploads: allUploads } = useDatabase();
+  const { wedding, uploads: allUploads, setUploads, setWedding, isSupabase } = useDatabase();
+
+  // Local Realtime Subscription for Slideshow
+  useEffect(() => {
+    if (!isSupabase || !wedding.id) return;
+
+    const channel = supabase!
+      .channel(`vv-slideshow-${wedding.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'weddings', filter: `id=eq.${wedding.id}` },
+        (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setWedding(payload.new as any);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'uploads', filter: `wedding_id=eq.${wedding.id}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setUploads((prev) => {
+              if (prev.some((u) => u.id === payload.new.id)) return prev;
+              return [payload.new as any, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setUploads((prev) =>
+              prev.map((u) => (u.id === payload.new.id ? (payload.new as any) : u))
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setUploads((prev) => prev.filter((u) => u.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (channel) {
+        supabase!.removeChannel(channel);
+      }
+    };
+  }, [wedding.id, isSupabase, setUploads, setWedding]);
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);

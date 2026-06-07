@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import type { Wedding, Guest, Upload, Reaction, Comment, GuestSession } from '../lib/types';
 import * as localStore from '../lib/localStore';
@@ -31,6 +31,20 @@ interface DatabaseContextProps {
   // Helpers
   getReactionCounts: (uploadId: string) => { heart: number; laugh: number; wow: number };
   hasReacted: (uploadId: string, guestId: string, type: 'heart' | 'laugh' | 'wow') => boolean;
+
+  // Setters
+  setWedding: React.Dispatch<React.SetStateAction<Wedding>>;
+  setUploads: React.Dispatch<React.SetStateAction<Upload[]>>;
+  setGuests: React.Dispatch<React.SetStateAction<Guest[]>>;
+  setComments: React.Dispatch<React.SetStateAction<Comment[]>>;
+  setReactions: React.Dispatch<React.SetStateAction<Reaction[]>>;
+
+  // Targeted local-first refreshes
+  refreshWeddingSettings: () => Promise<void>;
+  refreshUploads: () => Promise<void>;
+  refreshGuests: () => Promise<void>;
+  refreshReactions: () => Promise<void>;
+  refreshCommentsAndReactions: (uploadIds: string[]) => Promise<void>;
 }
 
 const DatabaseContext = createContext<DatabaseContextProps | undefined>(undefined);
@@ -44,17 +58,21 @@ export function useDatabase() {
 }
 
 export function DatabaseProvider({ children }: { children: React.ReactNode }) {
-  const [loading, setLoading] = useState(isSupabaseConfigured);
+  const isSupabase = isSupabaseConfigured;
+
+  const [loading, setLoading] = useState(isSupabase);
   const [wedding, setWedding] = useState<Wedding>(localStore.getWedding());
   const [uploads, setUploads] = useState<Upload[]>(localStore.getUploads());
-  const [guests, setGuests] = useState<Guest[]>(localStore.getGuests());
-  const [comments, setComments] = useState<Comment[]>(localStore.getComments());
-  const [reactions, setReactions] = useState<Reaction[]>(localStore.getReactions());
+  // If Supabase is active, do not fetch guests, comments, reactions on first load
+  const [guests, setGuests] = useState<Guest[]>(isSupabase ? [] : localStore.getGuests());
+  const [comments, setComments] = useState<Comment[]>(isSupabase ? [] : localStore.getComments());
+  const [reactions, setReactions] = useState<Reaction[]>(isSupabase ? [] : localStore.getReactions());
   const [currentGuest, setCurrentGuest] = useState<GuestSession | null>(localStore.getGuestSession());
   const [isAdmin, setIsAdmin] = useState<boolean>(localStore.isAdminAuthenticated());
   const [isBanned, setIsBanned] = useState<boolean>(false);
 
-  const isSupabase = isSupabaseConfigured;
+  // Stable ref for the resolved wedding ID
+  const weddingIdRef = useRef<string>('');
 
   useEffect(() => {
     if (currentGuest && guests.length > 0) {
@@ -169,15 +187,17 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     return fileOrBase64;
   };
 
-  // ─── INITIAL LOAD (SUPABASE ONLY) ───
+  // ─── INITIAL LOAD ONCE (NO background realtime / polling here) ───
   useEffect(() => {
     if (!isSupabase) return;
 
-    const loadData = async () => {
+    let mounted = true;
+
+    const initialize = async () => {
       try {
         setLoading(true);
-        
-        // Resolve slug dynamically from URL or localStorage
+
+        // Resolve wedding slug from URL path or localStorage
         let resolvedSlug = '';
         const pathParts = window.location.pathname.split('/');
         const wIndex = pathParts.indexOf('wedding');
@@ -206,149 +226,131 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
           wData = data;
         }
 
+        if (!mounted) return;
+
         if (wData) {
           setWedding(wData);
           localStorage.setItem('vv_current_wedding_slug', wData.slug);
+          weddingIdRef.current = wData.id;
         } else {
           throw new Error('Failed to load wedding settings');
         }
 
-        // Load uploads
+        // Fetch uploads ONLY (guests, comments, reactions are fetched on-demand by mounted screens)
         const { data: uData } = await supabase!
           .from('uploads')
           .select('*')
           .eq('wedding_id', wData.id)
           .order('created_at', { ascending: false });
-        if (uData) setUploads(uData);
+        if (mounted && uData) setUploads(uData);
 
-        // Load guests
-        const { data: gData } = await supabase!
-          .from('guests')
-          .select('*')
-          .eq('wedding_id', wData.id);
-        if (gData) setGuests(gData);
-
-        // Load comments and reactions for this wedding's uploads only
-        const uploadIds = uData ? uData.map((u) => u.id) : [];
-        if (uploadIds.length > 0) {
-          const { data: cData } = await supabase!
-            .from('comments')
-            .select('*')
-            .in('upload_id', uploadIds);
-          if (cData) setComments(cData);
-
-          const { data: rData } = await supabase!
-            .from('reactions')
-            .select('*')
-            .in('upload_id', uploadIds);
-          if (rData) setReactions(rData);
-        } else {
-          setComments([]);
-          setReactions([]);
-        }
       } catch (err) {
-        console.error('Error loading Supabase data:', err);
+        console.error('Error loading Supabase initial data:', err);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
-    loadData();
-
-    // ─── REAL-TIME SUBSCRIPTION (SUPABASE ONLY) ───
-    const currentWeddingSlug = localStorage.getItem('vv_current_wedding_slug');
-    let weddingId = wedding?.id || 'wedding-demo-001';
-
-    const setupSubscriptions = async () => {
-      let resolvedId = weddingId;
-      if (!wedding?.id && currentWeddingSlug) {
-        const { data } = await supabase!
-          .from('weddings')
-          .select('id')
-          .eq('slug', currentWeddingSlug)
-          .single();
-        if (data) resolvedId = data.id;
-      }
-
-      const channel = supabase!
-        .channel('schema-db-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'weddings', filter: `id=eq.${resolvedId}` }, (payload) => {
-          if (payload.eventType === 'UPDATE') {
-            setWedding(payload.new as Wedding);
-          }
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'uploads', filter: `wedding_id=eq.${resolvedId}` }, (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setUploads((prev) => {
-              if (prev.some((u) => u.id === payload.new.id)) return prev;
-              return [payload.new as Upload, ...prev];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            setUploads((prev) => prev.map((u) => (u.id === payload.new.id ? (payload.new as Upload) : u)));
-          } else if (payload.eventType === 'DELETE') {
-            setUploads((prev) => prev.filter((u) => u.id !== payload.old.id));
-          }
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'guests', filter: `wedding_id=eq.${resolvedId}` }, (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setGuests((prev) => {
-              if (prev.some((g) => g.id === payload.new.id)) return prev;
-              return [...prev, payload.new as Guest];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            setGuests((prev) => prev.map((g) => (g.id === payload.new.id ? (payload.new as Guest) : g)));
-          } else if (payload.eventType === 'DELETE') {
-            setGuests((prev) => prev.filter((g) => g.id !== payload.old.id));
-          }
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setUploads((currentUploads) => {
-              const belongsToOurWedding = currentUploads.some((u) => u.id === payload.new.upload_id);
-              if (belongsToOurWedding) {
-                setComments((prev) => {
-                  if (prev.some((c) => c.id === payload.new.id)) return prev;
-                  return [...prev, payload.new as Comment];
-                });
-              }
-              return currentUploads;
-            });
-          } else if (payload.eventType === 'DELETE') {
-            setComments((prev) => prev.filter((c) => c.id !== payload.old.id));
-          }
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setUploads((currentUploads) => {
-              const belongsToOurWedding = currentUploads.some((u) => u.id === payload.new.upload_id);
-              if (belongsToOurWedding) {
-                setReactions((prev) => {
-                  if (prev.some((r) => r.id === payload.new.id)) return prev;
-                  return [...prev, payload.new as Reaction];
-                });
-              }
-              return currentUploads;
-            });
-          } else if (payload.eventType === 'DELETE') {
-            setReactions((prev) => prev.filter((r) => r.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      return channel;
-    };
-
-    let activeChannel: any = null;
-    setupSubscriptions().then((ch) => {
-      activeChannel = ch;
-    });
+    initialize();
 
     return () => {
-      if (activeChannel) {
-        supabase!.removeChannel(activeChannel);
-      }
+      mounted = false;
     };
-  }, [isSupabase, wedding?.id]);
+  }, []);
+
+  // ─── TARGETED DATA REFRESH ACTIONS ───
+
+  const refreshWeddingSettings = async () => {
+    if (!isSupabase || !weddingIdRef.current) return;
+    try {
+      const { data } = await supabase!
+        .from('weddings')
+        .select('*')
+        .eq('id', weddingIdRef.current)
+        .single();
+      if (data) setWedding(data);
+    } catch (err) {
+      console.error('Error refreshing wedding settings:', err);
+    }
+  };
+
+  const refreshUploads = async () => {
+    if (!isSupabase || !weddingIdRef.current) return;
+    try {
+      const { data } = await supabase!
+        .from('uploads')
+        .select('*')
+        .eq('wedding_id', weddingIdRef.current)
+        .order('created_at', { ascending: false });
+      if (data) setUploads(data);
+    } catch (err) {
+      console.error('Error refreshing uploads:', err);
+    }
+  };
+
+  const refreshGuests = async () => {
+    if (!isSupabase || !weddingIdRef.current) return;
+    try {
+      const { data } = await supabase!
+        .from('guests')
+        .select('*')
+        .eq('wedding_id', weddingIdRef.current);
+      if (data) setGuests(data);
+    } catch (err) {
+      console.error('Error refreshing guests:', err);
+    }
+  };
+
+  const refreshReactions = async () => {
+    if (!isSupabase || !weddingIdRef.current) return;
+    try {
+      const { data: uIds } = await supabase!
+        .from('uploads')
+        .select('id')
+        .eq('wedding_id', weddingIdRef.current);
+      const uploadIds = uIds ? uIds.map((u) => u.id) : [];
+      if (uploadIds.length > 0) {
+        const { data } = await supabase!
+          .from('reactions')
+          .select('*')
+          .in('upload_id', uploadIds);
+        if (data) setReactions(data);
+      } else {
+        setReactions([]);
+      }
+    } catch (err) {
+      console.error('Error refreshing reactions:', err);
+    }
+  };
+
+  const refreshCommentsAndReactions = async (uploadIds: string[]) => {
+    if (!isSupabase || uploadIds.length === 0) return;
+    try {
+      const { data: cData } = await supabase!
+        .from('comments')
+        .select('*')
+        .in('upload_id', uploadIds);
+      const { data: rData } = await supabase!
+        .from('reactions')
+        .select('*')
+        .in('upload_id', uploadIds);
+
+      if (cData) {
+        setComments((prev) => [
+          ...prev.filter((c) => !uploadIds.includes(c.upload_id)),
+          ...(cData as Comment[]),
+        ]);
+      }
+      if (rData) {
+        setReactions((prev) => [
+          ...prev.filter((r) => !uploadIds.includes(r.upload_id)),
+          ...(rData as Reaction[]),
+        ]);
+      }
+    } catch (err) {
+      console.error('Error refreshing comments & reactions:', err);
+    }
+  };
 
   // ─── MUTATIONS & ACTIONS ───
 
@@ -360,7 +362,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     if (isSupabase) {
       // Handle banner/portrait file uploads if they are custom base64
       let customUpdates = { ...updates };
-      const fieldsToUpload = ['hero_photo', 'couple_photo', 'gallery_banner'] as const;
+      const fieldsToUpload = ['hero_photo', 'couple_photo', 'gallery_banner', 'upload_placeholder_image'] as const;
       
       for (const field of fieldsToUpload) {
         const value = updates[field];
@@ -831,6 +833,16 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         toggleGuestBan,
         getReactionCounts,
         hasReacted,
+        setWedding,
+        setUploads,
+        setGuests,
+        setComments,
+        setReactions,
+        refreshWeddingSettings,
+        refreshUploads,
+        refreshGuests,
+        refreshReactions,
+        refreshCommentsAndReactions,
       }}
     >
       {children}

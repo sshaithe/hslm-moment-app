@@ -77,7 +77,7 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Invalid file type. Only images and videos are allowed.' });
     }
 
-    // ─── CHECK IF UPLOADS ARE PAUSED ───
+    // ─── SERVER-SIDE UPLOAD SECURITY CHECK ───
     const { data: wedding, error: dbError } = await supabase
       .from('weddings')
       .select('uploads_paused')
@@ -85,12 +85,12 @@ export default async function handler(req: any, res: any) {
       .single();
 
     if (dbError || !wedding) {
-      console.error('Database error fetching wedding uploads_paused state:', dbError);
-      return res.status(500).json({ error: 'Failed to verify wedding upload settings.' });
+      console.error('Server side auth check failed:', dbError);
+      return res.status(404).json({ error: 'Wedding settings not found' });
     }
 
     if (wedding.uploads_paused) {
-      return res.status(403).json({ error: 'Uploads are currently paused by the administrator for this wedding.' });
+      return res.status(403).json({ error: 'Uploads are paused by the admin.' });
     }
 
     const command = new PutObjectCommand({
@@ -99,9 +99,9 @@ export default async function handler(req: any, res: any) {
       ContentType: contentType,
     });
 
-    // Generate the presigned URL valid for 300 seconds (5 minutes)
+    // Generate the presigned URL valid for 900 seconds (15 minutes) to allow large video uploads
     const uploadUrl = await getSignedUrl(s3Client, command, {
-      expiresIn: 300,
+      expiresIn: 900,
       unhoistableHeaders: new Set(['x-amz-checksum-crc32', 'x-amz-sdk-checksum-algorithm']),
     });
 

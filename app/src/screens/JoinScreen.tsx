@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, ArrowLeft } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
@@ -17,6 +17,31 @@ export default function JoinScreen() {
   const nameRegex = /^[a-zA-ZçğıöşüÇĞİÖŞÜ\s'\-]+$/;
   const isValidName = (name: string) => name.trim() !== '' && nameRegex.test(name.trim());
 
+  // Restore drafts on mount
+  useEffect(() => {
+    const fn = localStorage.getItem('vv_join_first_name');
+    const ln = localStorage.getItem('vv_join_last_name');
+    const tn = localStorage.getItem('vv_join_table_number');
+    if (fn) setFirstName(fn);
+    if (ln) setLastName(ln);
+    if (tn) setTableNumber(tn);
+  }, []);
+
+  const handleFirstNameChange = (val: string) => {
+    setFirstName(val);
+    localStorage.setItem('vv_join_first_name', val);
+  };
+
+  const handleLastNameChange = (val: string) => {
+    setLastName(val);
+    localStorage.setItem('vv_join_last_name', val);
+  };
+
+  const handleTableNumberChange = (val: string) => {
+    setTableNumber(val);
+    localStorage.setItem('vv_join_table_number', val);
+  };
+
   const isValid = isValidName(firstName) && isValidName(lastName) && consent;
 
   const handleSubmit = async () => {
@@ -31,6 +56,12 @@ export default function JoinScreen() {
     }
 
     await registerGuest(firstName.trim(), lastName.trim(), tableNumber.trim());
+
+    // Clear drafts on success
+    localStorage.removeItem('vv_join_first_name');
+    localStorage.removeItem('vv_join_last_name');
+    localStorage.removeItem('vv_join_table_number');
+
     const params = new URLSearchParams(window.location.search);
     const redirectPath = params.get('redirect') || '/';
     navigate(redirectPath);
@@ -69,7 +100,7 @@ export default function JoinScreen() {
                 value={firstName}
                 onChange={(e) => {
                   const val = e.target.value;
-                  setFirstName(val);
+                  handleFirstNameChange(val);
                   setErrors((p) => ({
                     ...p,
                     firstName: val.trim() !== '' && !nameRegex.test(val.trim())
@@ -90,7 +121,7 @@ export default function JoinScreen() {
                 value={lastName}
                 onChange={(e) => {
                   const val = e.target.value;
-                  setLastName(val);
+                  handleLastNameChange(val);
                   setErrors((p) => ({
                     ...p,
                     lastName: val.trim() !== '' && !nameRegex.test(val.trim())
@@ -110,7 +141,7 @@ export default function JoinScreen() {
             type="text"
             placeholder={t('tableNumber')}
             value={tableNumber}
-            onChange={(e) => setTableNumber(e.target.value)}
+            onChange={(e) => handleTableNumberChange(e.target.value)}
             className="w-full bg-transparent border-b-2 border-accent-border focus:border-gold px-0 py-3 text-charcoal placeholder:text-muted-warm/60 focus:outline-none transition-colors text-sm"
           />
 

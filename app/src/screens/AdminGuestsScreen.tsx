@@ -1,14 +1,39 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
-import { Search, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Search, ShieldAlert, ShieldCheck, RefreshCw } from 'lucide-react';
 import type { Guest } from '@/lib/types';
 
 export default function AdminGuestsScreen() {
-  const { guests, toggleGuestBan } = useDatabase();
-  const { t } = useLanguage();
+  const { guests, toggleGuestBan, refreshGuests, isSupabase } = useDatabase();
+  const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [updatingGuestId, setUpdatingGuestId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshGuests();
+    setLastUpdated(new Date());
+    setIsRefreshing(false);
+  };
+
+  // Visibility-aware 5-minute polling + cleanup
+  useEffect(() => {
+    if (!isSupabase) return;
+
+    handleRefresh();
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshGuests();
+        setLastUpdated(new Date());
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [isSupabase]);
 
   const filteredGuests = guests.filter((guest) => {
     const fullName = `${guest.first_name} ${guest.last_name}`.toLowerCase();
@@ -34,11 +59,26 @@ export default function AdminGuestsScreen() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="font-heading text-2xl text-charcoal">{t('guests')}</h1>
-        <p className="text-sm text-muted-warm mt-1">
-          {t('guestsSubtitle') || 'Manage guest gallery access and ban suspicious users.'}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl text-charcoal">{t('guests')}</h1>
+          <p className="text-sm text-muted-warm mt-1">
+            {t('guestsSubtitle') || 'Manage guest gallery access and ban suspicious users.'}
+          </p>
+        </div>
+        {isSupabase && (
+          <div className="flex items-center gap-2 self-start sm:self-center text-xs text-muted-warm font-medium bg-white px-3 py-1.5 rounded-xl shadow-card border border-accent-border/10">
+            <span>Updated: {lastUpdated.toLocaleTimeString(language === 'tr' ? 'tr-TR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-1 hover:bg-blush rounded transition-colors disabled:opacity-50 flex items-center justify-center"
+              title="Refresh guests"
+            >
+              <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Search Bar */}

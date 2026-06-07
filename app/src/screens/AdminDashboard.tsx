@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, QrCode, Monitor, Pause, Play, Image, MessageSquare, Users, Clock, EyeOff, CheckCircle, Star, Trash2 } from 'lucide-react';
+import { Download, QrCode, Monitor, Pause, Play, Image, MessageSquare, Users, Clock, EyeOff, CheckCircle, Star, Trash2, RefreshCw, BookOpen } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { Upload } from '@/lib/types';
@@ -8,9 +8,38 @@ import { getMediaUrl } from '@/lib/mediaHelper';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { wedding, uploads, guests, saveWeddingSettings, modifyUpload, removeUpload } = useDatabase();
-  const { t } = useLanguage();
+  const { wedding, uploads, guests, saveWeddingSettings, modifyUpload, removeUpload, refreshWeddingSettings, refreshUploads, refreshGuests, isSupabase } = useDatabase();
+  const { t, language } = useLanguage();
   const [downloadProgress, setDownloadProgress] = useState<string | null>(null);
+  const [pdfProgress, setPdfProgress] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([refreshWeddingSettings(), refreshUploads(), refreshGuests()]);
+    setLastUpdated(new Date());
+    setIsRefreshing(false);
+  };
+
+  // Visibility-aware 5-minute polling + cleanup
+  useEffect(() => {
+    if (!isSupabase) return;
+
+    // Load initial data on dashboard mount (e.g., guests isn't loaded in Provider first load)
+    handleRefresh();
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshWeddingSettings();
+        refreshUploads();
+        refreshGuests();
+        setLastUpdated(new Date());
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [isSupabase]);
 
   const handleDownloadAll = async () => {
     if (downloadProgress) return; // Prevent double execution
@@ -78,6 +107,177 @@ export default function AdminDashboard() {
     }
   };
 
+  // ─── PDF Guest Book Export ───────────────────────────────────────────────
+  const handleDownloadGuestBookPdf = async () => {
+    if (pdfProgress) return;
+
+    const guestbookEntries = uploads.filter((u) => u.type === 'guestbook');
+    if (guestbookEntries.length === 0) {
+      alert(t('guestBookPdfEmpty'));
+      return;
+    }
+
+    try {
+      setPdfProgress('Loading...');
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 18;
+      const contentW = pageW - margin * 2;
+
+      // Helper to load image from URL as base64
+      const loadImage = (src: string): Promise<string | null> =>
+        new Promise((resolve) => {
+          const img = new window.Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            canvas.getContext('2d')!.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          };
+          img.onerror = () => resolve(null);
+          img.src = src;
+        });
+
+      // ── Cover Page ──────────────────────────────────────────────────────────
+      // Background gradient simulation using a filled rect
+      doc.setFillColor(255, 251, 245); // ivory
+      doc.rect(0, 0, pageW, pageH, 'F');
+
+      // Gold accent line top
+      doc.setFillColor(201, 168, 76);
+      doc.rect(0, 0, pageW, 3, 'F');
+      doc.rect(0, pageH - 3, pageW, 3, 'F');
+
+      doc.setFont('times', 'italic');
+      doc.setFontSize(11);
+      doc.setTextColor(180, 150, 80);
+      doc.text(t('pdfKeepsakeFrom'), pageW / 2, 35, { align: 'center' });
+
+      doc.setFont('times', 'bolditalic');
+      doc.setFontSize(30);
+      doc.setTextColor(40, 35, 30);
+      doc.text(wedding.couple_name, pageW / 2, 52, { align: 'center' });
+
+      doc.setFont('times', 'normal');
+      doc.setFontSize(12);
+      doc.setTextColor(120, 100, 80);
+      const formattedDate = new Date(wedding.wedding_date).toLocaleDateString('en-US', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+      doc.text(formattedDate, pageW / 2, 63, { align: 'center' });
+      doc.text(wedding.venue, pageW / 2, 71, { align: 'center' });
+
+      // Decorative divider
+      doc.setDrawColor(201, 168, 76);
+      doc.setLineWidth(0.5);
+      doc.line(margin + 20, 79, pageW - margin - 20, 79);
+
+      doc.setFont('times', 'bolditalic');
+      doc.setFontSize(24);
+      doc.setTextColor(40, 35, 30);
+      doc.text('Guest Book', pageW / 2, 96, { align: 'center' });
+
+      doc.setFont('times', 'italic');
+      doc.setFontSize(11);
+      doc.setTextColor(150, 130, 110);
+      doc.text(t('pdfHeartfeltEntries', { count: String(guestbookEntries.length) }), pageW / 2, 108, { align: 'center' });
+
+      // ── Entry Pages ──────────────────────────────────────────────────────────
+      let entryNum = 0;
+      for (const entry of guestbookEntries) {
+        entryNum++;
+        setPdfProgress(`${Math.round((entryNum / guestbookEntries.length) * 100)}%`);
+        doc.addPage();
+
+        // Page background
+        doc.setFillColor(255, 251, 245);
+        doc.rect(0, 0, pageW, pageH, 'F');
+
+        // Gold top bar
+        doc.setFillColor(201, 168, 76);
+        doc.rect(0, 0, pageW, 2, 'F');
+
+        let yPos = margin;
+
+        // Guest name header
+        doc.setFont('times', 'bolditalic');
+        doc.setFontSize(18);
+        doc.setTextColor(40, 35, 30);
+        doc.text(entry.guest_name, margin, yPos + 6);
+        yPos += 10;
+
+        // Date
+        const entryDate = new Date(entry.created_at).toLocaleDateString('en-US', {
+          month: 'long', day: 'numeric', year: 'numeric'
+        });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(150, 130, 110);
+        doc.text(entryDate, margin, yPos + 2);
+        yPos += 8;
+
+        // Gold divider
+        doc.setDrawColor(201, 168, 76);
+        doc.setLineWidth(0.3);
+        doc.line(margin, yPos, pageW - margin, yPos);
+        yPos += 8;
+
+        // Drawing image
+        if (entry.drawing_data_url) {
+          try {
+            const drawH = 50;
+            doc.addImage(entry.drawing_data_url, 'PNG', margin, yPos, contentW, drawH);
+            yPos += drawH + 6;
+          } catch { /* skip if invalid */ }
+        }
+
+        // Wish text
+        if (entry.message_text) {
+          doc.setFont('times', 'italic');
+          doc.setFontSize(13);
+          doc.setTextColor(60, 50, 40);
+          const lines = doc.splitTextToSize(`\u201C${entry.message_text}\u201D`, contentW);
+          doc.text(lines, margin, yPos);
+          yPos += lines.length * 7 + 6;
+        }
+
+        // Photo image
+        const photoSrc = entry.public_url || entry.local_url;
+        if (photoSrc && !photoSrc.startsWith('blob:')) {
+          const b64 = await loadImage(photoSrc);
+          if (b64) {
+            const maxImgH = Math.min(80, pageH - yPos - margin);
+            const maxImgW = contentW;
+            try {
+              doc.addImage(b64, 'JPEG', margin, yPos, maxImgW, maxImgH);
+              yPos += maxImgH + 4;
+            } catch { /* skip */ }
+          }
+        }
+
+        // Page number
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(180, 160, 130);
+        doc.text(`${entryNum} / ${guestbookEntries.length}`, pageW - margin, pageH - 10, { align: 'right' });
+      }
+
+      // Save
+      const safeName = wedding.couple_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      doc.save(`${safeName}_guest_book.pdf`);
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      alert(t('guestBookPdfError'));
+    } finally {
+      setPdfProgress(null);
+    }
+  };
+
   const stats = [
     { label: t('totalUploadsStat'), value: uploads.length, icon: Image, color: 'bg-gold/10 text-gold' },
     { label: t('guestMessages'), value: uploads.filter((u) => u.type === 'message').length, icon: MessageSquare, color: 'bg-blush text-gold' },
@@ -99,6 +299,11 @@ export default function AdminDashboard() {
       action: () => {
         saveWeddingSettings({ uploads_paused: !wedding.uploads_paused });
       },
+    },
+    {
+      label: pdfProgress ? `${t('guestBookPdf')} (${pdfProgress})` : t('guestBookPdf'),
+      icon: BookOpen,
+      action: handleDownloadGuestBookPdf,
     },
   ];
 
@@ -133,9 +338,24 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="font-heading text-2xl text-charcoal">{wedding.couple_name} &mdash; {t('weddingDashboard')}</h1>
-        <p className="text-sm text-muted-warm mt-1">{new Date(wedding.wedding_date).toLocaleDateString()} &bull; {wedding.venue}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl text-charcoal">{wedding.couple_name} &mdash; {t('weddingDashboard')}</h1>
+          <p className="text-sm text-muted-warm mt-1">{new Date(wedding.wedding_date).toLocaleDateString()} &bull; {wedding.venue}</p>
+        </div>
+        {isSupabase && (
+          <div className="flex items-center gap-2 self-start sm:self-center text-xs text-muted-warm font-medium bg-white px-3 py-1.5 rounded-xl shadow-card border border-accent-border/10">
+            <span>Updated: {lastUpdated.toLocaleTimeString(language === 'tr' ? 'tr-TR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-1 hover:bg-blush rounded transition-colors disabled:opacity-50 flex items-center justify-center"
+              title="Refresh dashboard"
+            >
+              <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Stats */}

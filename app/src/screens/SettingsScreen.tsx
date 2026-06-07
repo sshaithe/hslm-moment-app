@@ -292,8 +292,9 @@ function PhotoCustomizationSection({
   saveWeddingSettings: (updates: Partial<Wedding>) => Promise<void>;
 }) {
   const w = wedding;
+  const { t } = useLanguage();
 
-  const handlePhotoChange = (field: 'hero_photo' | 'couple_photo' | 'gallery_banner', file: File) => {
+  const handlePhotoChange = (field: 'hero_photo' | 'couple_photo' | 'gallery_banner' | 'upload_placeholder_image', file: File) => {
     const reader = new FileReader();
     reader.onload = async () => {
       await saveWeddingSettings({ [field]: reader.result as string });
@@ -302,7 +303,7 @@ function PhotoCustomizationSection({
     reader.readAsDataURL(file);
   };
 
-  const handlePhotoRemove = async (field: 'hero_photo' | 'couple_photo' | 'gallery_banner') => {
+  const handlePhotoRemove = async (field: 'hero_photo' | 'couple_photo' | 'gallery_banner' | 'upload_placeholder_image') => {
     await saveWeddingSettings({ [field]: '' });
     onSaved();
   };
@@ -343,6 +344,14 @@ function PhotoCustomizationSection({
           currentPhoto={w.gallery_banner}
           onUpload={(f) => handlePhotoChange('gallery_banner', f)}
           onRemove={() => handlePhotoRemove('gallery_banner')}
+          language={language}
+        />
+        <PhotoUploadRow
+          label={t('uploadPlaceholderLabel')}
+          description={t('uploadPlaceholderDesc')}
+          currentPhoto={w.upload_placeholder_image}
+          onUpload={(f) => handlePhotoChange('upload_placeholder_image', f)}
+          onRemove={() => handlePhotoRemove('upload_placeholder_image')}
           language={language}
         />
       </div>

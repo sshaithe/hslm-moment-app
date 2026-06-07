@@ -17,10 +17,11 @@ export interface Wedding {
   approve_before_display: boolean;
   slideshow_approval_mode: boolean;
   uploads_paused: boolean;
-  hero_photo?: string;      // base64 or URL for the landing page hero background
-  couple_photo?: string;    // base64 or URL for the couple portrait on the landing page
-  gallery_banner?: string;  // base64 or URL for the gallery screen header
-  thank_you_quote?: string; // custom thank you/welcome quote shown on the landing page
+  hero_photo?: string;             // base64 or URL for the landing page hero background
+  couple_photo?: string;           // base64 or URL for the couple portrait on the landing page
+  gallery_banner?: string;         // base64 or URL for the gallery screen header
+  upload_placeholder_image?: string; // placeholder shown on video cards while uploading
+  thank_you_quote?: string;        // custom thank you/welcome quote shown on the landing page
 }
 
 export interface Guest {
@@ -34,7 +35,7 @@ export interface Guest {
   is_banned?: boolean;
 }
 
-export type UploadType = 'photo' | 'video' | 'message';
+export type UploadType = 'photo' | 'video' | 'message' | 'guestbook';
 
 export interface Upload {
   id: string;
@@ -47,6 +48,7 @@ export interface Upload {
   public_url?: string;
   caption?: string;
   message_text?: string;
+  drawing_data_url?: string;  // base64 PNG of handwritten signature / drawing (guest book)
   is_approved: boolean;
   is_hidden: boolean;
   is_featured: boolean;
@@ -90,7 +92,7 @@ export type Language = 'tr' | 'en';
 
 export type GalleryTab = 'all' | 'photos' | 'videos' | 'messages' | 'popular';
 
-export type AdminNavItem = 'dashboard' | 'uploads' | 'gallery' | 'qrcode' | 'slideshow' | 'settings' | 'guests';
+export type AdminNavItem = 'dashboard' | 'uploads' | 'gallery' | 'qrcode' | 'slideshow' | 'settings' | 'guests' | 'guestbook';
 
 export interface AppState {
   wedding: Wedding;

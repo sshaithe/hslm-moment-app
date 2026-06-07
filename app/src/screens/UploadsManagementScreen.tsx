@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Search, EyeOff, Trash2, CheckCircle, Star, MessageSquare, Filter } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, EyeOff, Trash2, CheckCircle, Star, MessageSquare, Filter, RefreshCw, Loader2 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { TranslationKey } from '@/i18n/LanguageContext';
@@ -10,12 +10,37 @@ type StatusFilter = 'all' | 'visible' | 'hidden' | 'pending' | 'reported' | 'fea
 type TypeFilter = 'all' | 'photo' | 'video' | 'message';
 
 export default function UploadsManagementScreen() {
-  const { t } = useLanguage();
-  const { uploads, modifyUpload, removeUpload } = useDatabase();
+  const { t, language } = useLanguage();
+  const { wedding, uploads, modifyUpload, removeUpload, refreshUploads, isSupabase } = useDatabase();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshUploads();
+    setLastUpdated(new Date());
+    setIsRefreshing(false);
+  };
+
+  // Visibility-aware 5-minute polling + cleanup
+  useEffect(() => {
+    if (!isSupabase) return;
+
+    handleRefresh();
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshUploads();
+        setLastUpdated(new Date());
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [isSupabase]);
 
   const filteredUploads = uploads.filter((u) => {
     if (search && !u.guest_name.toLowerCase().includes(search.toLowerCase()) && !u.caption?.toLowerCase().includes(search.toLowerCase())) return false;
@@ -74,7 +99,22 @@ export default function UploadsManagementScreen() {
 
   return (
     <div className="space-y-4">
-      <h1 className="font-heading text-2xl text-charcoal">{t('uploadsManagement')}</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h1 className="font-heading text-2xl text-charcoal">{t('uploadsManagement')}</h1>
+        {isSupabase && (
+          <div className="flex items-center gap-2 self-start sm:self-center text-xs text-muted-warm font-medium bg-white px-3 py-1.5 rounded-xl shadow-card border border-accent-border/10">
+            <span>Updated: {lastUpdated.toLocaleTimeString(language === 'tr' ? 'tr-TR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-1 hover:bg-blush rounded transition-colors disabled:opacity-50 flex items-center justify-center"
+              title="Refresh uploads"
+            >
+              <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Search & Filters */}
       <div className="bg-white rounded-xl p-4 shadow-card space-y-3">
@@ -173,10 +213,26 @@ export default function UploadsManagementScreen() {
                     />
                   </td>
                   <td className="p-3">
-                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-blush">
-                      {upload.type === 'video' ? (
-                        <video src={getMediaUrl(upload.local_url || upload.public_url) || undefined} className="w-full h-full object-cover" muted playsInline />
-                      ) : upload.type === 'photo' ? (
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-blush flex-shrink-0 relative">
+                      {upload.type === 'video' ? (() => {
+                        const url = getMediaUrl(upload.local_url || upload.public_url);
+                        if (!url) {
+                          const phUrl = wedding.upload_placeholder_image ? getMediaUrl(wedding.upload_placeholder_image) : null;
+                          return phUrl ? (
+                            <>
+                              <img src={phUrl || undefined} alt="" className="w-full h-full object-cover opacity-70" />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <Loader2 size={14} className="text-gold animate-spin" />
+                              </div>
+                            </>
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Loader2 size={14} className="text-gold animate-spin" />
+                            </div>
+                          );
+                        }
+                        return <video src={url} className="w-full h-full object-cover" muted playsInline />;
+                      })() : upload.type === 'photo' ? (
                         <img src={getMediaUrl(upload.local_url || upload.public_url) || undefined} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
