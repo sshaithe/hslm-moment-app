@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Film, MessageSquare, X, UploadCloud, Shield, ArrowLeft, RefreshCw, Video, Library, Square, Zap } from 'lucide-react';
+import { Camera, Film, MessageSquare, X, UploadCloud, Shield, ArrowLeft, RefreshCw, Video, Library, Square } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -23,14 +23,11 @@ export default function UploadScreen() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isCompressing, setIsCompressing] = useState(false);
-  const [compressionProgress, setCompressionProgress] = useState(0);
   const [sparklePos, setSparklePos] = useState<{ x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Error and Skip States
+  // Error State
   const [uploadError, setUploadError] = useState(false);
-  const skipCompressionRef = useRef<boolean>(false);
 
   // Restore drafts on mount
   useEffect(() => {
@@ -144,9 +141,7 @@ export default function UploadScreen() {
     canvas.toBlob((blob) => {
       if (blob) {
         const fileObj = new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
-        setFile(fileObj);
-        const previewUrl = URL.createObjectURL(blob);
-        setPreview(previewUrl);
+        validateAndSetFile(fileObj);
         stopCamera();
       }
     }, 'image/jpeg', 0.95);
@@ -177,14 +172,12 @@ export default function UploadScreen() {
         }
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const videoBlob = new Blob(chunksRef.current, { type: recorder.mimeType || 'video/mp4' });
         
         const extension = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
         const fileObj = new File([videoBlob], `capture_${Date.now()}.${extension}`, { type: videoBlob.type });
-        setFile(fileObj);
-        const previewUrl = URL.createObjectURL(videoBlob);
-        setPreview(previewUrl);
+        await validateAndSetFile(fileObj);
         stopCamera();
       };
 
@@ -222,207 +215,81 @@ export default function UploadScreen() {
     };
   }, [stream]);
 
-  // Compress image client-side to save bandwidth/storage and prevent Safari memory crashes
-  const compressImage = (file: File, maxWidth = 1920, maxHeight = 1920, quality = 0.8): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(img.src);
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return reject(new Error('Canvas context not available'));
-
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob(
-          (blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Canvas compression failed'));
-          },
-          'image/jpeg',
-          quality
-        );
+  // Helper to resolve video duration
+  const checkVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(video.src);
+        resolve(video.duration);
       };
-      img.onerror = (err) => reject(err);
+      video.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        resolve(0);
+      };
+      video.src = URL.createObjectURL(file);
     });
   };
 
-  /**
-   * Compress a video file in-browser by:
-   * 1. Loading the video into a hidden <video> element
-   * 2. Capturing frames via canvas.captureStream() at reduced resolution
-   * 3. Re-encoding with MediaRecorder at a lower bitrate (~2 Mbps)
-   *
-   * Returns the compressed Blob (webm or mp4 depending on browser support).
-   * Falls back to the original blob if compression is not supported.
-   */
-  const compressVideo = (blob: Blob, onProgress?: (pct: number) => void): Promise<Blob> => {
-    return new Promise((resolve) => {
-      const MAX_WIDTH = 1280;
-      const MAX_HEIGHT = 720;
-      const TARGET_VIDEO_BITRATE = 1_800_000; // 1.8 Mbps  → ~13 MB/min
-      const TARGET_AUDIO_BITRATE = 128_000;   // 128 kbps
+  // Centralized validator for file type, size, and duration
+  const validateAndSetFile = async (f: File) => {
+    // 1. File Size Validation (150MB cap)
+    const MAX_SIZE = 150 * 1024 * 1024;
+    if (f.size > MAX_SIZE) {
+      addToast(
+        language === 'tr'
+          ? 'Lütfen 150MB\'tan küçük bir dosya seçin.'
+          : 'Please choose a file smaller than 150MB.',
+        'error'
+      );
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
-      // Pick best supported MIME type
-      const mimeType = [
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus',
-        'video/webm',
-        'video/mp4',
-      ].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+    // 2. MIME Type / Extension Validation
+    const isImage = f.type.startsWith('image/');
+    const isVideo = f.type.startsWith('video/');
 
-      if (!mimeType) {
-        // No supported codec found – skip compression
-        resolve(blob);
+    if (uploadType === 'photo') {
+      const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!isImage || !allowedImageTypes.includes(f.type)) {
+        addToast(
+          language === 'tr'
+            ? 'Desteklenmeyen görsel türü. Sadece JPG, JPEG, PNG, WEBP desteklenir.'
+            : 'Unsupported image type. Only JPG, JPEG, PNG, WEBP are allowed.',
+          'error'
+        );
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    } else if (uploadType === 'video') {
+      const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
+      if (!isVideo || !allowedVideoTypes.includes(f.type)) {
+        addToast(
+          language === 'tr'
+            ? 'Desteklenmeyen video türü. Sadece MP4, MOV, WEBM desteklenir.'
+            : 'Unsupported video type. Only MP4, MOV, WEBM are allowed.',
+          'error'
+        );
+        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
 
-      const blobUrl = URL.createObjectURL(blob);
-      const video = document.createElement('video');
-      video.src = blobUrl;
-      video.muted = true;
-      video.playsInline = true;
-      video.crossOrigin = 'anonymous';
-
-      video.onloadedmetadata = () => {
-        const origW = video.videoWidth  || 1280;
-        const origH = video.videoHeight || 720;
-        const scale = Math.min(1, MAX_WIDTH / origW, MAX_HEIGHT / origH);
-        const width  = Math.round(origW * scale);
-        const height = Math.round(origH * scale);
-        const duration = video.duration;
-
-        const canvas = document.createElement('canvas');
-        canvas.width  = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d')!;
-
-        // Capture canvas stream at up to 30 fps
-        const canvasStream = (canvas as any).captureStream(30) as MediaStream;
-
-        // Try to add audio track from video (works in Chrome/Edge)
-        let mediaStream = canvasStream;
-        try {
-          const audioCtx = new AudioContext();
-          const src = audioCtx.createMediaElementSource(video);
-          const dest = audioCtx.createMediaStreamDestination();
-          src.connect(dest);
-          src.connect(audioCtx.destination); // also play audio
-          mediaStream = new MediaStream([
-            ...canvasStream.getVideoTracks(),
-            ...dest.stream.getAudioTracks(),
-          ]);
-        } catch {
-          // Audio capture unsupported – video-only
-        }
-
-        const chunks: Blob[] = [];
-        let recorder: MediaRecorder;
-        try {
-          recorder = new MediaRecorder(mediaStream, {
-            mimeType,
-            videoBitsPerSecond: TARGET_VIDEO_BITRATE,
-            audioBitsPerSecond: TARGET_AUDIO_BITRATE,
-          });
-        } catch {
-          URL.revokeObjectURL(blobUrl);
-          resolve(blob);
-          return;
-        }
-
-        recorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) chunks.push(e.data);
-        };
-
-        recorder.onstop = () => {
-          URL.revokeObjectURL(blobUrl);
-          const compressed = new Blob(chunks, { type: mimeType });
-          // Only use compressed version if it's actually smaller
-          resolve(compressed.size < blob.size ? compressed : blob);
-        };
-
-        // Draw video frames to canvas in real-time
-        let rafId: number;
-        const drawFrame = () => {
-          if (skipCompressionRef.current) {
-            cancelAnimationFrame(rafId);
-            try { recorder.stop(); } catch {}
-            URL.revokeObjectURL(blobUrl);
-            resolve(blob);
-            return;
-          }
-          if (video.paused || video.ended) return;
-          ctx.drawImage(video, 0, 0, width, height);
-          if (onProgress && duration > 0) {
-            onProgress(Math.min(99, Math.round((video.currentTime / duration) * 100)));
-          }
-          rafId = requestAnimationFrame(drawFrame);
-        };
-
-        recorder.start(100);
-        video.playbackRate = 1;
-        video.play().then(() => {
-          drawFrame();
-        }).catch(() => {
-          cancelAnimationFrame(rafId);
-          recorder.stop();
-        });
-
-        video.onended = () => {
-          cancelAnimationFrame(rafId);
-          // Final frame
-          ctx.drawImage(video, 0, 0, width, height);
-          recorder.stop();
-          if (onProgress) onProgress(100);
-        };
-
-        video.onerror = () => {
-          cancelAnimationFrame(rafId);
-          try { recorder.stop(); } catch {}
-          URL.revokeObjectURL(blobUrl);
-          resolve(blob); // fallback
-        };
-      };
-
-      video.onerror = () => {
-        URL.revokeObjectURL(blobUrl);
-        resolve(blob); // fallback
-      };
-    });
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    
-    // 200 MB hard cap – above this even compression is impractical on-device
-    if (uploadType === 'video' && f.size > 200 * 1024 * 1024) {
-      addToast(
-        language === 'tr'
-          ? 'Video dosyası çok büyük (Maksimum 200MB). Lütfen daha kısa bir video seçin.'
-          : 'Video file is too large (200MB max). Please choose a shorter video.',
-        'error'
-      );
-      return;
+      // 3. Video Duration Validation (under 2 minutes / 120s)
+      const duration = await checkVideoDuration(f);
+      if (duration > 120) {
+        addToast(
+          language === 'tr'
+            ? 'Lütfen 2 dakikadan kısa bir video seçin.'
+            : 'Please choose a video shorter than 2 minutes.',
+          'error'
+        );
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
     }
-    
+
     // Revoke previous preview URL to prevent memory leaks
     if (preview && preview.startsWith('blob:')) {
       URL.revokeObjectURL(preview);
@@ -431,26 +298,20 @@ export default function UploadScreen() {
     setFile(f);
     const objectUrl = URL.createObjectURL(f);
     setPreview(objectUrl);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    await validateAndSetFile(f);
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files?.[0];
     if (!f) return;
-    
-    if (uploadType === 'video' && f.size > 200 * 1024 * 1024) {
-      addToast(
-        language === 'tr'
-          ? 'Video dosyası çok büyük (Maksimum 200MB). Lütfen daha kısa bir video seçin.'
-          : 'Video file is too large (200MB max). Please choose a shorter video.',
-        'error'
-      );
-      return;
-    }
-    
-    setFile(f);
-    const objectUrl = URL.createObjectURL(f);
-    setPreview(objectUrl);
+    validateAndSetFile(f);
   }, [preview, uploadType, language]);
 
   const handleSubmit = async () => {
@@ -460,42 +321,13 @@ export default function UploadScreen() {
     }
 
     setUploadError(false);
-    skipCompressionRef.current = false;
 
     const guestName = guest ? `${guest.first_name} ${guest.last_name}` : 'Anonymous';
     const guestId = guest?.guest_id || 'anonymous';
 
     let localUploadUrl = preview || undefined;
-    let finalPreviewUrlToCleanup = '';
 
     try {
-      // ── Video: compress before uploading ──
-      if (uploadType === 'video' && file) {
-        // Only compress if file is > 15 MB or browser clearly benefits
-        const needsCompression = file.size > 15 * 1024 * 1024;
-        if (needsCompression) {
-          setIsCompressing(true);
-          setCompressionProgress(0);
-          try {
-            const compressed = await compressVideo(file, (pct) => setCompressionProgress(pct));
-            localUploadUrl = URL.createObjectURL(compressed);
-            finalPreviewUrlToCleanup = localUploadUrl;
-          } catch {
-            // If compression fails for any reason, continue with original
-          } finally {
-            setIsCompressing(false);
-            setCompressionProgress(0);
-          }
-        }
-      }
-
-      // ── Photo: compress client-side ──
-      if (uploadType === 'photo' && file) {
-        const compressedBlob = await compressImage(file);
-        localUploadUrl = URL.createObjectURL(compressedBlob);
-        finalPreviewUrlToCleanup = localUploadUrl;
-      }
-
       setIsUploading(true);
       setUploadProgress(0);
 
@@ -512,6 +344,7 @@ export default function UploadScreen() {
         is_hidden: false,
         is_featured: false,
         report_count: 0,
+        file_size: file ? file.size : undefined,
       };
 
       await createUpload(upload, (progress) => {
@@ -526,11 +359,6 @@ export default function UploadScreen() {
       setShowSuccess(true);
       addToast(t('uploadSuccessToast'), 'success');
 
-      // Cleanup object URL
-      if (finalPreviewUrlToCleanup) {
-        URL.revokeObjectURL(finalPreviewUrlToCleanup);
-      }
-
       setTimeout(() => {
         navigate('/gallery');
       }, 1200);
@@ -538,17 +366,12 @@ export default function UploadScreen() {
       console.error('Upload error:', err);
       setUploadError(true);
       addToast(t('uploadFailed'), 'error');
-      
-      // Cleanup object URL on error
-      if (finalPreviewUrlToCleanup) {
-        URL.revokeObjectURL(finalPreviewUrlToCleanup);
-      }
     } finally {
       setIsUploading(false);
     }
   };
 
-  const canSubmit = !isCompressing && !isUploading && (uploadType === 'message' ? messageText.trim().length > 0 : (uploadType === 'video' ? file !== null : true));
+  const canSubmit = !isUploading && (uploadType === 'message' ? messageText.trim().length > 0 : (uploadType === 'video' ? file !== null : true));
 
   const typeOptions: { type: UploadType; icon: typeof Camera; label: string }[] = [
     { type: 'photo', icon: Camera, label: t('photo') },
@@ -586,43 +409,7 @@ export default function UploadScreen() {
         </button>
       </div>
 
-      {isCompressing ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 animate-fade-in">
-          <div className="w-full max-w-xs text-center">
-            <div className="w-20 h-20 rounded-full bg-blush flex items-center justify-center mx-auto mb-6 relative">
-              <Zap size={32} className="text-gold animate-pulse" />
-              <div className="absolute inset-0 rounded-full border-2 border-gold/20 border-t-gold animate-spin" />
-            </div>
-            <h3 className="font-heading text-xl text-charcoal mb-2">Optimising video...</h3>
-            <p className="text-xs text-muted-warm mb-4">Compressing for faster upload — please keep this page open</p>
-            <div className="w-full h-2.5 bg-blush rounded-full overflow-hidden mb-3 border border-accent-border/40 shadow-inner">
-              <div
-                className="h-full gradient-gold rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${compressionProgress}%` }}
-              />
-            </div>
-            <div className="flex justify-between items-center text-xs text-muted-warm font-medium px-1">
-              <span>{compressionProgress < 100 ? `${compressionProgress}% done` : 'Finalising...'}</span>
-              <span>Smart compression</span>
-            </div>
-            <div className="mt-8 space-y-2">
-              <p className="text-[10px] text-red-500/85 leading-normal max-w-xs mx-auto">
-                {language === 'tr' 
-                  ? '⚠️ Uyarı: Optimizasyonu atlamak, çok daha büyük bir dosya yüklenmesine neden olur. Yavaş bağlantılarda yükleme başarısız olabilir veya çok uzun sürebilir.' 
-                  : '⚠️ Warning: Skipping optimization uploads the raw large file. On slow connections, this can take a very long time or fail.'}
-              </p>
-              <button
-                onClick={() => {
-                  skipCompressionRef.current = true;
-                }}
-                className="text-xs text-muted-warm underline hover:text-charcoal transition-colors py-1 px-3 block mx-auto"
-              >
-                {language === 'tr' ? 'Optimizasyonu Atla ve Orijinali Yükle' : 'Skip and Upload Original'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : isUploading ? (
+      {isUploading ? (
         <div className="flex-1 flex flex-col items-center justify-center px-6 animate-fade-in">
           <div className="w-full max-w-xs text-center">
             <div className="w-20 h-20 rounded-full bg-blush flex items-center justify-center mx-auto mb-6 relative">

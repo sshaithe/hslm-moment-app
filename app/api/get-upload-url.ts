@@ -64,17 +64,29 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { filename, contentType, weddingId } = req.body;
+    const { filename, contentType, weddingId, fileSize } = req.body;
 
     if (!filename || !contentType || !weddingId) {
       return res.status(400).json({ error: 'Missing required parameters (filename, contentType, weddingId)' });
     }
 
+    if (fileSize === undefined || typeof fileSize !== 'number') {
+      return res.status(400).json({ error: 'Missing or invalid parameter (fileSize)' });
+    }
+
+    // ─── SERVER-SIDE SIZE SECURITY CHECK ───
+    const MAX_SIZE = 150 * 1024 * 1024;
+    if (fileSize > MAX_SIZE) {
+      return res.status(400).json({ error: `File size exceeds the limit of 150MB.` });
+    }
+
     // ─── FILE TYPE VALIDATION ───
-    const isImage = contentType.startsWith('image/');
-    const isVideo = contentType.startsWith('video/');
-    if (!isImage && !isVideo) {
-      return res.status(400).json({ error: 'Invalid file type. Only images and videos are allowed.' });
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
+    const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+
+    if (!allowedTypes.includes(contentType)) {
+      return res.status(400).json({ error: `Unsupported or invalid content type: ${contentType}` });
     }
 
     // ─── SERVER-SIDE UPLOAD SECURITY CHECK ───

@@ -49,6 +49,7 @@ export interface Upload {
   caption?: string;
   message_text?: string;
   drawing_data_url?: string;  // base64 PNG of handwritten signature / drawing (guest book)
+  file_size?: number;         // size of the media file in bytes
   is_approved: boolean;
   is_hidden: boolean;
   is_featured: boolean;
