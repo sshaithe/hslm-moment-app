@@ -32,6 +32,8 @@ export const tr = {
   shareNow: 'Şimdi Paylaş',
   uploadSuccess: 'Yükleme Başarılı!',
   securityNote: 'Yüklemeniz canlı galeride anında görünecek. Uygunsuz içerik çift tarafından kaldırılabilir.',
+  uploadFromLibrary: 'Kütüphaneden Yükle',
+  liveCamera: 'Canlı Kamera',
 
   // Gallery
   liveGallery: 'Canlı Galeri',
@@ -149,4 +151,7 @@ export const tr = {
   settingsSaved: 'Ayarlar kaydedildi!',
   actionSuccess: 'İşlem başarılı!',
   error: 'Bir hata oluştu.',
+  cameraAccessError: 'Kameraya erişilemedi. Kütüphaneden yüklemeye yönlendiriliyorsunuz.',
+  videoRecordingError: 'Bu tarayıcıda doğrudan video kaydı desteklenmiyor.',
+  uploadFailed: 'Yükleme başarısız oldu. Lütfen tekrar deneyin.',
 } as const;

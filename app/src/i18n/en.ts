@@ -32,6 +32,8 @@ export const en = {
   shareNow: 'Share Now',
   uploadSuccess: 'Upload Successful!',
   securityNote: 'Your upload will appear instantly in the live gallery. Inappropriate content can be removed by the couple.',
+  uploadFromLibrary: 'Upload from Library',
+  liveCamera: 'Live Camera',
 
   // Gallery
   liveGallery: 'Live Gallery',
@@ -150,4 +152,7 @@ export const en = {
   settingsSaved: 'Settings saved!',
   actionSuccess: 'Action successful!',
   error: 'An error occurred.',
+  cameraAccessError: 'Cannot access camera. Falling back to library upload.',
+  videoRecordingError: 'Direct recording is not supported in this browser.',
+  uploadFailed: 'Upload failed. Please try again.',
 } as const;

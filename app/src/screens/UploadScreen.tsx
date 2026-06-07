@@ -72,7 +72,7 @@ export default function UploadScreen() {
       }
     } catch (err) {
       console.error('Failed to access camera stream:', err);
-      addToast('Cannot access camera. Falling back to library upload.', 'error');
+      addToast(t('cameraAccessError'), 'error');
       setSourceMode('library');
     }
   };
@@ -160,7 +160,7 @@ export default function UploadScreen() {
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to initiate MediaRecorder:', err);
-      addToast('Direct recording is not supported in this browser.', 'error');
+      addToast(t('videoRecordingError'), 'error');
     }
   };
 
@@ -310,7 +310,7 @@ export default function UploadScreen() {
       }, 1200);
     } catch (err) {
       console.error('Upload error:', err);
-      addToast('Upload failed. Please try again.', 'error');
+      addToast(t('uploadFailed'), 'error');
       
       // Cleanup object URL on error
       if (finalPreviewUrlToCleanup) {
@@ -445,7 +445,7 @@ export default function UploadScreen() {
                   }`}
                 >
                   <Library size={13} />
-                  <span>Upload from Library</span>
+                  <span>{t('uploadFromLibrary')}</span>
                 </button>
                 <button
                   type="button"
@@ -457,7 +457,7 @@ export default function UploadScreen() {
                   }`}
                 >
                   <Camera size={13} />
-                  <span>Live Camera</span>
+                  <span>{t('liveCamera')}</span>
                 </button>
               </div>
             </div>
