@@ -63,22 +63,27 @@ export default function MessageWallScreen() {
     const guestName = guest ? `${guest.first_name} ${guest.last_name}` : 'Anonymous';
     const guestId = guest?.guest_id || 'anonymous';
 
-    await createUpload({
-      id: uuidv4(),
-      wedding_id: wedding.id,
-      guest_id: guestId,
-      guest_name: guestName,
-      type: 'message',
-      message_text: messageText.trim(),
-      is_approved: !wedding.approve_before_display,
-      is_hidden: false,
-      is_featured: false,
-      report_count: 0,
-    });
+    try {
+      await createUpload({
+        id: uuidv4(),
+        wedding_id: wedding.id,
+        guest_id: guestId,
+        guest_name: guestName,
+        type: 'message',
+        message_text: messageText.trim(),
+        is_approved: !wedding.approve_before_display,
+        is_hidden: false,
+        is_featured: false,
+        report_count: 0,
+      });
 
-    setMessageText('');
-    localStorage.removeItem('vv_message_wall_text');
-    setShowComposer(false);
+      setMessageText('');
+      localStorage.removeItem('vv_message_wall_text');
+      setShowComposer(false);
+    } catch (err) {
+      console.error('Failed to submit message:', err);
+      alert(t('uploadFailed'));
+    }
   };
 
   return (

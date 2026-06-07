@@ -40,7 +40,7 @@ export type UploadType = 'photo' | 'video' | 'message' | 'guestbook';
 export interface Upload {
   id: string;
   wedding_id: string;
-  guest_id: string;
+  guest_id: string | null;
   guest_name: string;
   type: UploadType;
   local_url?: string;

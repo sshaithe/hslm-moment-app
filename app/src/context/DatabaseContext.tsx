@@ -509,6 +509,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
 
       const newUpload: Upload = {
         ...upload,
+        guest_id: upload.guest_id === 'anonymous' ? null : upload.guest_id,
         public_url,
         local_url: undefined, // remove blobs before inserting
         created_at: new Date().toISOString(),
@@ -525,7 +526,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('Error creating upload in Supabase:', error);
-        return newUpload;
+        throw error;
       }
       return data as Upload;
     } else {

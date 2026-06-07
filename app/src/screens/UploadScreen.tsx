@@ -605,14 +605,21 @@ export default function UploadScreen() {
               <span>{compressionProgress < 100 ? `${compressionProgress}% done` : 'Finalising...'}</span>
               <span>Smart compression</span>
             </div>
-            <button
-              onClick={() => {
-                skipCompressionRef.current = true;
-              }}
-              className="mt-6 w-full py-2.5 rounded-full border border-charcoal/20 text-charcoal font-medium text-xs hover:bg-charcoal/5 transition-colors"
-            >
-              Skip and Upload Original
-            </button>
+            <div className="mt-8 space-y-2">
+              <p className="text-[10px] text-red-500/85 leading-normal max-w-xs mx-auto">
+                {language === 'tr' 
+                  ? '⚠️ Uyarı: Optimizasyonu atlamak, çok daha büyük bir dosya yüklenmesine neden olur. Yavaş bağlantılarda yükleme başarısız olabilir veya çok uzun sürebilir.' 
+                  : '⚠️ Warning: Skipping optimization uploads the raw large file. On slow connections, this can take a very long time or fail.'}
+              </p>
+              <button
+                onClick={() => {
+                  skipCompressionRef.current = true;
+                }}
+                className="text-xs text-muted-warm underline hover:text-charcoal transition-colors py-1 px-3 block mx-auto"
+              >
+                {language === 'tr' ? 'Optimizasyonu Atla ve Orijinali Yükle' : 'Skip and Upload Original'}
+              </button>
+            </div>
           </div>
         </div>
       ) : isUploading ? (
