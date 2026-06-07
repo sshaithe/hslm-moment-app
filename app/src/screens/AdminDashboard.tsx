@@ -52,7 +52,15 @@ export default function AdminDashboard() {
 
     try {
       setDownloadProgress('0%');
-      const JSZip = (await import('jszip')).default;
+      let JSZipModule;
+      try {
+        JSZipModule = await import('jszip');
+      } catch (importErr) {
+        console.error('Failed to dynamically import jszip. Reloading to get new chunks...', importErr);
+        window.location.reload();
+        return;
+      }
+      const JSZip = JSZipModule.default;
       const zip = new JSZip();
 
       let loadedCount = 0;
@@ -119,7 +127,15 @@ export default function AdminDashboard() {
 
     try {
       setPdfProgress('Loading...');
-      const { jsPDF } = await import('jspdf');
+      let jsPDFModule;
+      try {
+        jsPDFModule = await import('jspdf');
+      } catch (importErr) {
+        console.error('Failed to dynamically import jspdf. Reloading to get new chunks...', importErr);
+        window.location.reload();
+        return;
+      }
+      const { jsPDF } = jsPDFModule;
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
       const pageW = doc.internal.pageSize.getWidth();

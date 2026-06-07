@@ -60,6 +60,7 @@ export default function SlideshowScreen() {
   const visibleUploads = allUploads.filter((u) => {
     if (u.is_hidden) return false;
     if (u.type === 'message') return false;
+    if (u.type === 'video') return false; // Filter out videos to prevent slow loading lags in slideshow
     if (wedding.slideshow_approval_mode && !u.is_approved && !u.is_featured) return false;
     return true;
   });
