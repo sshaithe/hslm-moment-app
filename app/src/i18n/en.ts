@@ -167,4 +167,5 @@ export const en = {
   banConfirm: 'Are you sure you want to suspend this guest? They will lose access to the gallery and uploads.',
   unbanConfirm: 'Are you sure you want to lift the suspension for this guest?',
   joinedAt: 'Joined At',
+  invalidNameError: 'Name can only contain letters.',
 } as const;

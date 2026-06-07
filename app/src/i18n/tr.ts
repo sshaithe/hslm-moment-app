@@ -166,4 +166,5 @@ export const tr = {
   banConfirm: 'Bu misafirin erişimini askıya almak istediğinize emin misiniz? Galeriye ve yüklemelere erişimi engellenecektir.',
   unbanConfirm: 'Bu misafirin askı durumunu kaldırmak istediğinize emin misiniz?',
   joinedAt: 'Katılım Tarihi',
+  invalidNameError: 'İsim sadece harflerden oluşabilir.',
 } as const;

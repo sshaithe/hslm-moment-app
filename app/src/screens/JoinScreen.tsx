@@ -14,12 +14,15 @@ export default function JoinScreen() {
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
 
-  const isValid = firstName.trim() && lastName.trim() && consent;
+  const nameRegex = /^[a-zA-ZçğıöşüÇĞİÖŞÜ\s'\-]+$/;
+  const isValidName = (name: string) => name.trim() !== '' && nameRegex.test(name.trim());
+
+  const isValid = isValidName(firstName) && isValidName(lastName) && consent;
 
   const handleSubmit = async () => {
     const newErrors: Record<string, boolean> = {};
-    if (!firstName.trim()) newErrors.firstName = true;
-    if (!lastName.trim()) newErrors.lastName = true;
+    if (!isValidName(firstName)) newErrors.firstName = true;
+    if (!isValidName(lastName)) newErrors.lastName = true;
     if (!consent) newErrors.consent = true;
 
     if (Object.keys(newErrors).length > 0) {
@@ -64,22 +67,42 @@ export default function JoinScreen() {
                 type="text"
                 placeholder={t('firstName')}
                 value={firstName}
-                onChange={(e) => { setFirstName(e.target.value); setErrors((p) => ({ ...p, firstName: false })); }}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFirstName(val);
+                  setErrors((p) => ({
+                    ...p,
+                    firstName: val.trim() !== '' && !nameRegex.test(val.trim())
+                  }));
+                }}
                 className={`w-full bg-transparent border-b-2 px-0 py-3 text-charcoal placeholder:text-muted-warm/60 focus:outline-none transition-colors text-sm ${
                   errors.firstName ? 'border-red-400' : 'border-accent-border focus:border-gold'
                 }`}
               />
+              {errors.firstName && (
+                <p className="text-[10px] text-red-400 mt-1">{t('invalidNameError')}</p>
+              )}
             </div>
             <div>
               <input
                 type="text"
                 placeholder={t('lastName')}
                 value={lastName}
-                onChange={(e) => { setLastName(e.target.value); setErrors((p) => ({ ...p, lastName: false })); }}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setLastName(val);
+                  setErrors((p) => ({
+                    ...p,
+                    lastName: val.trim() !== '' && !nameRegex.test(val.trim())
+                  }));
+                }}
                 className={`w-full bg-transparent border-b-2 px-0 py-3 text-charcoal placeholder:text-muted-warm/60 focus:outline-none transition-colors text-sm ${
                   errors.lastName ? 'border-red-400' : 'border-accent-border focus:border-gold'
                 }`}
               />
+              {errors.lastName && (
+                <p className="text-[10px] text-red-400 mt-1">{t('invalidNameError')}</p>
+              )}
             </div>
           </div>
 
