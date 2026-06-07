@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Upload, Image, QrCode, Monitor, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Upload, Image, QrCode, Monitor, Settings, LogOut, Users } from 'lucide-react';
 import { isAdminAuthenticated } from '@/lib/localStore';
 import { useEffect } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -26,6 +26,7 @@ export default function AdminLayout() {
     { path: '/admin/qr', icon: QrCode, label: t('qrCode') },
     { path: '/admin/slideshow', icon: Monitor, label: t('slideshow') },
     { path: '/admin/settings', icon: Settings, label: t('settings') },
+    { path: '/admin/guests', icon: Users, label: t('guests') },
   ];
 
   const handleLogout = () => {

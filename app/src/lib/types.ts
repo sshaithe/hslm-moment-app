@@ -31,6 +31,7 @@ export interface Guest {
   table_number?: string;
   joined_at: string;
   last_seen_at: string;
+  is_banned?: boolean;
 }
 
 export type UploadType = 'photo' | 'video' | 'message';
@@ -89,7 +90,7 @@ export type Language = 'tr' | 'en';
 
 export type GalleryTab = 'all' | 'photos' | 'videos' | 'messages' | 'popular';
 
-export type AdminNavItem = 'dashboard' | 'uploads' | 'gallery' | 'qrcode' | 'slideshow' | 'settings';
+export type AdminNavItem = 'dashboard' | 'uploads' | 'gallery' | 'qrcode' | 'slideshow' | 'settings' | 'guests';
 
 export interface AppState {
   wedding: Wedding;

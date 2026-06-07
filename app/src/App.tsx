@@ -15,6 +15,7 @@ import UploadsManagementScreen from '@/screens/UploadsManagementScreen';
 import QRScreen from '@/screens/QRScreen';
 import SlideshowScreen from '@/screens/SlideshowScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
+import AdminGuestsScreen from '@/screens/AdminGuestsScreen';
 
 export default function App() {
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/admin/qr" element={<QRScreen />} />
         <Route path="/admin/slideshow" element={<SlideshowScreen />} />
         <Route path="/admin/settings" element={<SettingsScreen />} />
+        <Route path="/admin/guests" element={<AdminGuestsScreen />} />
       </Route>
     </Routes>
   );

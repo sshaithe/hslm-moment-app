@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, QrCode, Monitor, Pause, Play, Image, MessageSquare, Users, Clock, EyeOff, CheckCircle, Star, Trash2 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
@@ -8,6 +9,73 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { wedding, uploads, guests, saveWeddingSettings, modifyUpload, removeUpload } = useDatabase();
   const { t } = useLanguage();
+  const [downloadProgress, setDownloadProgress] = useState<string | null>(null);
+
+  const handleDownloadAll = async () => {
+    if (downloadProgress) return; // Prevent double execution
+
+    const mediaUploads = uploads.filter((u) => u.type === 'photo' || u.type === 'video');
+    if (mediaUploads.length === 0) {
+      alert(t('noPhotos') || 'No photos or videos to download.');
+      return;
+    }
+
+    try {
+      setDownloadProgress('0%');
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      let loadedCount = 0;
+      for (const upload of mediaUploads) {
+        const url = upload.public_url || upload.local_url;
+        if (!url) {
+          loadedCount++;
+          continue;
+        }
+
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+          const blob = await res.blob();
+
+          const sanitizedName = upload.guest_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+          const extension = upload.type === 'video' ? 'mp4' : 'jpg';
+          const fileIndex = mediaUploads.indexOf(upload) + 1;
+          const fileName = `${fileIndex}_${sanitizedName}_${upload.id.slice(0, 8)}.${extension}`;
+          
+          zip.file(fileName, blob);
+        } catch (err) {
+          console.error(`Failed to fetch media from ${url}:`, err);
+        }
+
+        loadedCount++;
+        const percent = Math.round((loadedCount / mediaUploads.length) * 100);
+        setDownloadProgress(`${percent}%`);
+      }
+
+      setDownloadProgress('Zipping...');
+      const content = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+        if (metadata.percent) {
+          setDownloadProgress(`Zipping (${Math.round(metadata.percent)}%)`);
+        }
+      });
+
+      const downloadUrl = URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const coupleName = wedding.couple_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      link.download = `${coupleName}_wedding_media.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Failed to download all media:', error);
+      alert(t('error') || 'Failed to download and package media files.');
+    } finally {
+      setDownloadProgress(null);
+    }
+  };
 
   const stats = [
     { label: t('totalUploadsStat'), value: uploads.length, icon: Image, color: 'bg-gold/10 text-gold' },
@@ -17,7 +85,11 @@ export default function AdminDashboard() {
   ];
 
   const quickActions = [
-    { label: t('downloadAll'), icon: Download, action: () => {} },
+    {
+      label: downloadProgress ? `${t('downloadAll')} (${downloadProgress})` : t('downloadAll'),
+      icon: Download,
+      action: handleDownloadAll
+    },
     { label: t('generateQR'), icon: QrCode, action: () => navigate('/admin/qr') },
     { label: t('liveSlideshow'), icon: Monitor, action: () => navigate('/admin/slideshow') },
     {

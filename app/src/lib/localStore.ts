@@ -62,6 +62,15 @@ export function addGuest(guest: Guest): Guest {
   return guest;
 }
 
+export function updateGuest(id: string, updates: Partial<Guest>): Guest | null {
+  const guests = getGuests();
+  const idx = guests.findIndex((g) => g.id === id);
+  if (idx === -1) return null;
+  guests[idx] = { ...guests[idx], ...updates };
+  localStorage.setItem(STORAGE_KEYS.GUESTS, JSON.stringify(guests));
+  return guests[idx];
+}
+
 // ─── Uploads ───
 export function getUploads(): Upload[] {
   const raw = localStorage.getItem(STORAGE_KEYS.UPLOADS);

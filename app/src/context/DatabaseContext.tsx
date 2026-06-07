@@ -13,6 +13,7 @@ interface DatabaseContextProps {
   reactions: Reaction[];
   currentGuest: GuestSession | null;
   isAdmin: boolean;
+  isBanned: boolean;
   
   // Actions
   saveWeddingSettings: (updates: Partial<Wedding>) => Promise<void>;
@@ -25,6 +26,7 @@ interface DatabaseContextProps {
   loginAsAdmin: (password: string) => Promise<boolean>;
   logoutAsAdmin: () => void;
   logoutGuestSession: () => void;
+  toggleGuestBan: (guestId: string, shouldBan: boolean) => Promise<boolean>;
 
   // Helpers
   getReactionCounts: (uploadId: string) => { heart: number; laugh: number; wow: number };
@@ -50,8 +52,18 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const [reactions, setReactions] = useState<Reaction[]>(localStore.getReactions());
   const [currentGuest, setCurrentGuest] = useState<GuestSession | null>(localStore.getGuestSession());
   const [isAdmin, setIsAdmin] = useState<boolean>(localStore.isAdminAuthenticated());
+  const [isBanned, setIsBanned] = useState<boolean>(false);
 
   const isSupabase = isSupabaseConfigured;
+
+  useEffect(() => {
+    if (currentGuest && guests.length > 0) {
+      const match = guests.find((g) => g.id === currentGuest.guest_id);
+      setIsBanned(match ? !!match.is_banned : false);
+    } else {
+      setIsBanned(false);
+    }
+  }, [currentGuest, guests]);
 
   // ─── UTILITY: Upload base64 or file to Cloudflare R2 ───
   const uploadMedia = async (
@@ -265,6 +277,10 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
               if (prev.some((g) => g.id === payload.new.id)) return prev;
               return [...prev, payload.new as Guest];
             });
+          } else if (payload.eventType === 'UPDATE') {
+            setGuests((prev) => prev.map((g) => (g.id === payload.new.id ? (payload.new as Guest) : g)));
+          } else if (payload.eventType === 'DELETE') {
+            setGuests((prev) => prev.filter((g) => g.id !== payload.old.id));
           }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, (payload) => {
@@ -707,6 +723,54 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     setCurrentGuest(null);
   };
 
+  const toggleGuestBan = async (guestId: string, shouldBan: boolean): Promise<boolean> => {
+    // Update local state first (optimistic)
+    setGuests((prev) => prev.map((g) => (g.id === guestId ? { ...g, is_banned: shouldBan } : g)));
+
+    if (isSupabase) {
+      try {
+        const adminPassword = localStore.getAdminPassword() || '';
+        const response = await fetch('/api/update-guest', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            guestId,
+            weddingId: wedding.id,
+            updates: { is_banned: shouldBan },
+            adminPassword,
+          }),
+        });
+
+        if (!response.ok) {
+          console.error('Failed to update guest ban status via API');
+          // Revert optimistic update
+          setGuests((prev) => prev.map((g) => (g.id === guestId ? { ...g, is_banned: !shouldBan } : g)));
+          return false;
+        }
+
+        const data = await response.json();
+        if (data.success && data.guest) {
+          setGuests((prev) => prev.map((g) => (g.id === guestId ? (data.guest as Guest) : g)));
+        }
+        return true;
+      } catch (err) {
+        console.error('Error in toggleGuestBan:', err);
+        // Revert optimistic update
+        setGuests((prev) => prev.map((g) => (g.id === guestId ? { ...g, is_banned: !shouldBan } : g)));
+        return false;
+      }
+    } else {
+      const updated = localStore.updateGuest(guestId, { is_banned: shouldBan });
+      if (updated) {
+        setGuests((prev) => prev.map((g) => (g.id === guestId ? updated : g)));
+        return true;
+      }
+      return false;
+    }
+  };
+
   // ─── HELPERS ───
 
   const getReactionCounts = (uploadId: string) => {
@@ -734,6 +798,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         reactions,
         currentGuest,
         isAdmin,
+        isBanned,
         saveWeddingSettings,
         registerGuest,
         createUpload,
@@ -744,6 +809,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         loginAsAdmin,
         logoutAsAdmin,
         logoutGuestSession,
+        toggleGuestBan,
         getReactionCounts,
         hasReacted,
       }}

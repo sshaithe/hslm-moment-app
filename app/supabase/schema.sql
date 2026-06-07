@@ -38,7 +38,8 @@ create table if not exists public.guests (
     last_name text not null,
     table_number text,
     joined_at timestamp with time zone default timezone('utc'::text, now()) not null,
-    last_seen_at timestamp with time zone default timezone('utc'::text, now()) not null
+    last_seen_at timestamp with time zone default timezone('utc'::text, now()) not null,
+    is_banned boolean default false not null
 );
 
 -- ─── 3. UPLOADS ───

@@ -10,7 +10,25 @@ export default function GuestLayout() {
   const location = useLocation();
   const guest = getGuestSession();
   const { t } = useLanguage();
-  const { wedding } = useDatabase();
+  const { wedding, isBanned } = useDatabase();
+
+  if (isBanned) {
+    return (
+      <div className="min-h-screen bg-ivory flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-[380px] w-full p-8 rounded-3xl bg-white/80 backdrop-blur-md shadow-premium flex flex-col items-center gap-6 border border-rose-100/40">
+          <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          </div>
+          <h2 className="font-heading text-2xl text-charcoal">{t('bannedTitle')}</h2>
+          <p className="text-muted-warm text-sm leading-relaxed">
+            {t('bannedMessage')}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const isActive = (path: string) => {
     if (path === '/' || path.startsWith('/wedding/')) {
