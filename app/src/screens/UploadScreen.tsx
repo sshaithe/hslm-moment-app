@@ -376,8 +376,9 @@ export default function UploadScreen() {
     }
   };
 
-  // Video count check (10 videos limit)
+  // Video and Photo upload count checks (10 videos / 50 photos limit)
   const myUploadedIds: string[] = JSON.parse(localStorage.getItem('vv_my_uploaded_ids') || '[]');
+  
   const myVideos = uploads.filter((u) => {
     if (u.type !== 'video') return false;
     // Match registered guests
@@ -387,10 +388,23 @@ export default function UploadScreen() {
   });
   const videoLimitReached = myVideos.length >= 10;
 
+  const myPhotos = uploads.filter((u) => {
+    if (u.type !== 'photo') return false;
+    // Match registered guests
+    if (guest && u.guest_id === guest.guest_id) return true;
+    // Match device uploads for anonymous guest fallback
+    return myUploadedIds.includes(u.id);
+  });
+  const photoLimitReached = myPhotos.length >= 50;
+
   const canSubmit = !isUploading && (
     uploadType === 'message'
       ? messageText.trim().length > 0
-      : (uploadType === 'video' ? (file !== null && !videoLimitReached) : file !== null)
+      : (uploadType === 'video'
+          ? (file !== null && !videoLimitReached)
+          : (uploadType === 'photo'
+              ? (file !== null && !photoLimitReached)
+              : file !== null))
   );
 
   const typeOptions: { type: UploadType; icon: typeof Camera; label: string }[] = [
@@ -502,7 +516,7 @@ export default function UploadScreen() {
           </div>
 
           {/* Source Selector (Library vs. Live Camera) */}
-          {uploadType !== 'message' && !(uploadType === 'video' && videoLimitReached) && !preview && (
+          {uploadType !== 'message' && !(uploadType === 'video' && videoLimitReached) && !(uploadType === 'photo' && photoLimitReached) && !preview && (
             <div className="px-5 mb-3 animate-fade-in">
               <div className="flex bg-blush/40 p-1 rounded-full border border-accent-border/30">
                 <button
@@ -551,20 +565,39 @@ export default function UploadScreen() {
             ) : uploadType === 'video' && videoLimitReached ? (
               <div className="w-full rounded-xl border border-gold/40 bg-blush/20 p-6 flex flex-col items-center justify-center text-center gap-4 animate-fade-in" style={{ aspectRatio: '4/3' }}>
                 <div className="w-12 h-12 rounded-full bg-blush flex items-center justify-center text-gold">
-                  <Film size={22} className="animate-pulse" />
+                  <Film size={22} />
                 </div>
                 <div>
                   <h4 className="font-heading text-base text-charcoal font-semibold mb-1">
-                    {language === 'tr' ? 'Video Sınırına Ulaşıldı' : 'Video Limit Reached'}
+                    {language === 'tr' ? 'Harika Paylaşımlarınız İçin Teşekkürler!' : 'Thank You for Sharing!'}
                   </h4>
                   <p className="text-xs text-muted-warm px-4 leading-relaxed">
                     {language === 'tr'
-                      ? 'Paylaşım başına en fazla 10 video yükleyebilirsiniz. Yeni video eklemek için galeriden eski videolarınızı silebilirsiniz.'
-                      : 'You can upload a maximum of 10 videos. You can delete previous videos from the gallery to upload new ones.'}
+                      ? 'En güzel 10 videonuzu paylaştınız! Galeriye katkınız için teşekkürler. Yeni bir video eklemek isterseniz eskileri silebilirsiniz.'
+                      : "You've shared your top 10 video moments! Thank you for keeping the gallery sweet. You can replace older videos if you capture something new."}
                   </p>
                 </div>
                 <div className="text-[11px] font-semibold text-gold bg-white px-3 py-1 rounded-full border border-gold/20 shadow-sm">
                   {language === 'tr' ? 'Yüklenen: 10 / 10 Video' : 'Uploaded: 10 / 10 Videos'}
+                </div>
+              </div>
+            ) : uploadType === 'photo' && photoLimitReached ? (
+              <div className="w-full rounded-xl border border-gold/40 bg-blush/20 p-6 flex flex-col items-center justify-center text-center gap-4 animate-fade-in" style={{ aspectRatio: '4/3' }}>
+                <div className="w-12 h-12 rounded-full bg-blush flex items-center justify-center text-gold">
+                  <Camera size={22} />
+                </div>
+                <div>
+                  <h4 className="font-heading text-base text-charcoal font-semibold mb-1">
+                    {language === 'tr' ? 'Harika Fotoğraflarınız İçin Teşekkürler!' : 'Thank You for Sharing!'}
+                  </h4>
+                  <p className="text-xs text-muted-warm px-4 leading-relaxed">
+                    {language === 'tr'
+                      ? 'En güzel 50 fotoğrafınızı paylaştınız! Harika anlar yakaladığınız için teşekkürler. Yeni bir fotoğraf eklemek isterseniz eskileri silebilirsiniz.'
+                      : "You've shared your top 50 photo moments! Thank you for capturing so many highlights. You can replace older photos if you capture something new."}
+                  </p>
+                </div>
+                <div className="text-[11px] font-semibold text-gold bg-white px-3 py-1 rounded-full border border-gold/20 shadow-sm">
+                  {language === 'tr' ? 'Yüklenen: 50 / 50 Fotoğraf' : 'Uploaded: 50 / 50 Photos'}
                 </div>
               </div>
             ) : (
@@ -673,6 +706,13 @@ export default function UploadScreen() {
                           : `Videos Uploaded: ${myVideos.length} / 10`}
                       </p>
                     )}
+                    {uploadType === 'photo' && (
+                      <p className="text-[11px] text-muted-warm/60">
+                        {language === 'tr' 
+                          ? `Yüklenen Fotoğraf: ${myPhotos.length} / 50`
+                          : `Photos Uploaded: ${myPhotos.length} / 50`}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -689,6 +729,18 @@ export default function UploadScreen() {
               />
               <EmojiPicker onSelect={(emoji) => handleCaptionChange(caption + emoji)} />
             </div>
+
+            {/* Limit Tip Note */}
+            {uploadType !== 'message' && (
+              <div className="mt-3.5 px-3 py-2.5 flex items-start gap-2 text-[11px] text-muted-warm/75 leading-relaxed bg-blush/20 rounded-xl border border-accent-border/30">
+                <span className="font-semibold text-gold mt-0.5">💡</span>
+                <span>
+                  {language === 'tr'
+                    ? 'En güzel anlarınızı seçin! Canlı slayt gösterisinin sorunsuz çalışması için misafir başına yüklemeler 10 video ve 50 fotoğraf ile sınırlıdır.'
+                    : 'Share your best highlights! To keep the slideshow running smoothly for everyone, uploads are limited to 10 videos and 50 photos per guest.'}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Submit */}
