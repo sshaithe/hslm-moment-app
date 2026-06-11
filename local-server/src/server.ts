@@ -22,6 +22,8 @@ import adminRouter from './routes/admin';
 dotenv.config();
 
 const app = express();
+// Trust Cloudflare Tunnel proxy to get the real guest IPs for rate limiting
+app.set('trust proxy', 1);
 const PORT = parseInt(process.env.PORT || '4000', 10);
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
