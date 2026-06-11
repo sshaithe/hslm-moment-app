@@ -1,11 +1,21 @@
 /**
- * Utility to proxy Backblaze B2 URLs through the same-origin serverless endpoint.
- * This resolves iCloud Private Relay blocks and DNS/ISP restrictions on iOS/tablets.
+ * VowVault Plan B — Direct CDN Media URL Helper
+ *
+ * PLAN B CHANGE: Media is served directly from Backblaze/CDN.
+ * Photos and videos are NEVER proxied through the local PC.
+ * This keeps your home internet bandwidth free for API/metadata only.
+ *
+ * - Local/blob/data URLs: returned as-is (used during upload flow)
+ * - Remote URLs (Backblaze, CDN): returned as-is (direct CDN access)
+ * - No /api/media proxy path is generated
+ *
+ * The /api/media endpoint on the local backend still exists as a 302
+ * redirect fallback, but the frontend will not call it for normal media loads.
  */
 export function getMediaUrl(url: string | null | undefined): string {
   if (!url) return '';
 
-  // Local/Blob/Data URLs do not need to be proxied
+  // Local/Blob/Data URLs pass through unchanged (used during upload / offline mode)
   if (
     url.startsWith('blob:') ||
     url.startsWith('data:') ||
@@ -15,35 +25,7 @@ export function getMediaUrl(url: string | null | undefined): string {
     return url;
   }
 
-  // Attempt proxying via VITE_S3_PUBLIC_URL prefix matching first
-  const publicUrlBase = import.meta.env.VITE_S3_PUBLIC_URL || '';
-  if (publicUrlBase) {
-    const base = publicUrlBase.endsWith('/') ? publicUrlBase : publicUrlBase + '/';
-    if (url.startsWith(base)) {
-      const fileKey = url.substring(base.length);
-      return `/api/media?file=${encodeURIComponent(fileKey)}`;
-    }
-  }
-
-  // Fallback pattern matching for any other S3/B2 configurations
-  if (url.includes('backblazeb2.com') || url.includes('/file/')) {
-    try {
-      const urlObj = new URL(url);
-      const pathname = urlObj.pathname;
-      const parts = pathname.split('/');
-
-      const uploadsIndex = parts.indexOf('uploads');
-      const settingsIndex = parts.indexOf('settings');
-      const targetIndex = uploadsIndex !== -1 ? uploadsIndex : settingsIndex;
-
-      if (targetIndex !== -1) {
-        const fileKey = parts.slice(targetIndex).join('/');
-        return `/api/media?file=${encodeURIComponent(fileKey)}`;
-      }
-    } catch (e) {
-      console.error('Failed to parse media URL for proxying:', url, e);
-    }
-  }
-
+  // All remote URLs (Backblaze, CDN, etc.) are returned directly.
+  // The browser loads media straight from Backblaze/CDN — zero bytes through your PC.
   return url;
 }

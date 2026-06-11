@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Mail, RefreshCw, Loader2 } from 'lucide-react';
+import { Mail, RefreshCw, Loader2 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
-import type { GalleryTab, Upload, Wedding } from '@/lib/types';
+import type { GalleryTab, Upload } from '@/lib/types';
 import { getMediaUrl } from '@/lib/mediaHelper';
+import VideoThumbnail from '@/components/shared/VideoThumbnail';
 
 export default function GalleryScreen() {
   const navigate = useNavigate();
@@ -13,6 +14,8 @@ export default function GalleryScreen() {
   const [activeTab, setActiveTab] = useState<GalleryTab>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [visibleCount, setVisibleCount] = useState(20);
+  const PAGE_SIZE = 20;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -34,7 +37,7 @@ export default function GalleryScreen() {
         refreshWeddingSettings();
         setLastUpdated(new Date());
       }
-    }, 5 * 60 * 1000);
+    }, 45 * 1000); // 45-second polling (Plan B)
 
     return () => clearInterval(interval);
   }, [isSupabase]);
@@ -86,15 +89,6 @@ export default function GalleryScreen() {
     return result;
   }, [uploads, reactions, activeTab, wedding.approve_before_display]);
 
-  const formatTime = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    if (mins < 1) return 'now';
-    if (mins < 60) return `${mins}m`;
-    if (hours < 24) return `${hours}h`;
-    return new Date(dateStr).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US', { month: 'short', day: 'numeric' });
-  };
 
   return (
     <div className="min-h-screen bg-ivory pb-20">
@@ -128,7 +122,7 @@ export default function GalleryScreen() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => { setActiveTab(tab.key); setVisibleCount(PAGE_SIZE); }}
               className={`px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                 activeTab === tab.key
                   ? 'bg-charcoal text-ivory'
@@ -162,7 +156,7 @@ export default function GalleryScreen() {
           </div>
         ) : (
           <div className="columns-2 gap-3">
-            {filteredUploads.map((upload) => (
+            {filteredUploads.slice(0, visibleCount).map((upload) => (
               <div key={upload.id} className="break-inside-avoid mb-3">
                 <button
                   onClick={() => navigate(`/photo/${upload.id}`)}
@@ -171,30 +165,56 @@ export default function GalleryScreen() {
                   {upload.type === 'message' ? (
                     <MessageCard upload={upload} />
                   ) : (
-                    <MediaCard upload={upload} formatTime={formatTime} wedding={wedding} />
+                    <MediaCard upload={upload} />
                   )}
                 </button>
               </div>
             ))}
           </div>
         )}
+
+        {/* Load More */}
+        {filteredUploads.length > visibleCount && (
+          <div className="flex flex-col items-center gap-2 pt-4 pb-2">
+            <p className="text-xs text-muted-warm">
+              {visibleCount} / {filteredUploads.length} {language === 'tr' ? 'gösteriliyor' : 'shown'}
+            </p>
+            <button
+              onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              className="px-6 py-2.5 rounded-full bg-charcoal text-ivory text-sm font-medium hover:bg-charcoal/80 transition-colors shadow-card"
+            >
+              {language === 'tr' ? `${Math.min(PAGE_SIZE, filteredUploads.length - visibleCount)} tane daha yükle` : `Load ${Math.min(PAGE_SIZE, filteredUploads.length - visibleCount)} more`}
+            </button>
+          </div>
+        )}
+        {filteredUploads.length > 0 && filteredUploads.length <= visibleCount && filteredUploads.length > PAGE_SIZE && (
+          <p className="text-center text-xs text-muted-warm/50 py-4">
+            {language === 'tr' ? 'Hepsi gösterildi' : 'All items shown'} ✓
+          </p>
+        )}
       </div>
 
-      {/* FAB */}
-      <button
-        onClick={() => navigate('/upload')}
-        className="fixed bottom-20 right-4 w-14 h-14 rounded-full gradient-gold shadow-elevated flex items-center justify-center z-40 hover:opacity-90 active:scale-95 transition-all"
-      >
-        <Plus size={24} className="text-white" />
-      </button>
+
     </div>
   );
 }
 
-function MediaCard({ upload, formatTime, wedding }: { upload: Upload; formatTime: (d: string) => string; wedding: Wedding }) {
+const MediaCard = memo(function MediaCard({ upload }: { upload: Upload }) {
+  const { wedding } = useDatabase();
+  const { language } = useLanguage();
   const mediaUrl = getMediaUrl(upload.local_url || upload.public_url);
   const isUploading = !mediaUrl && upload.type === 'video';
   const placeholderUrl = wedding.upload_placeholder_image ? getMediaUrl(wedding.upload_placeholder_image) : null;
+
+  const formatTime = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m`;
+    if (hours < 24) return `${hours}h`;
+    return new Date(dateStr).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US', { month: 'short', day: 'numeric' });
+  };
 
   return (
     <div className="bg-white rounded-xl overflow-hidden shadow-card">
@@ -206,6 +226,7 @@ function MediaCard({ upload, formatTime, wedding }: { upload: Upload; formatTime
               src={placeholderUrl || undefined}
               alt="Uploading..."
               className="w-full h-auto block object-cover opacity-80"
+              loading="lazy"
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/10">
               <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
@@ -219,24 +240,23 @@ function MediaCard({ upload, formatTime, wedding }: { upload: Upload; formatTime
             <Loader2 size={24} className="text-gold animate-spin" />
           </div>
         ) : upload.type === 'video' ? (
-          <video
-            src={mediaUrl || undefined}
-            className="w-full h-auto block object-cover"
-            preload="metadata"
-            muted
-            playsInline
+          <VideoThumbnail
+            src={mediaUrl!}
+            className="w-full aspect-video block"
+            seekTo={0.5}
           />
         ) : (
           <img
             src={mediaUrl || undefined}
             alt={upload.caption || ''}
             className="w-full h-auto block"
+            loading="lazy"
           />
         )}
         {upload.type === 'video' && !isUploading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-            <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
-              <div className="w-0 h-0 border-l-[14px] border-l-charcoal border-t-[9px] border-t-transparent border-b-[9px] border-b-transparent ml-1" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/15 hover:bg-black/25 transition-colors">
+            <div className="w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg">
+              <div className="w-0 h-0 border-l-[16px] border-l-charcoal border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent ml-1.5" />
             </div>
           </div>
         )}
@@ -250,9 +270,9 @@ function MediaCard({ upload, formatTime, wedding }: { upload: Upload; formatTime
       </div>
     </div>
   );
-}
+});
 
-function MessageCard({ upload }: { upload: Upload }) {
+const MessageCard = memo(function MessageCard({ upload }: { upload: Upload }) {
   return (
     <div className="bg-blush rounded-xl p-4 relative overflow-hidden shadow-card">
       <span className="absolute top-2 right-3 font-heading text-4xl text-gold/20 leading-none">&rdquo;</span>
@@ -264,4 +284,4 @@ function MessageCard({ upload }: { upload: Upload }) {
       </div>
     </div>
   );
-}
+});

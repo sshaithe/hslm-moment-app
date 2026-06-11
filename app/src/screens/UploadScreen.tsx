@@ -12,7 +12,7 @@ import EmojiPicker from '@/components/shared/EmojiPicker';
 
 export default function UploadScreen() {
   const navigate = useNavigate();
-  const { wedding, currentGuest: guest, createUpload, uploads } = useDatabase();
+  const { wedding, currentGuest: guest, createUpload, uploads, logoutGuestSession } = useDatabase();
   const { t, language } = useLanguage();
   const { toasts, addToast, removeToast } = useToast();
   const [uploadType, setUploadType] = useState<UploadType>('photo');
@@ -234,13 +234,14 @@ export default function UploadScreen() {
 
   // Centralized validator for file type, size, and duration
   const validateAndSetFile = async (f: File) => {
-    // 1. File Size Validation (150MB cap)
-    const MAX_SIZE = 150 * 1024 * 1024;
-    if (f.size > MAX_SIZE) {
+    // 1. File Size Validation (20MB for photo, 150MB for video)
+    const maxSize = uploadType === 'photo' ? 20 * 1024 * 1024 : 150 * 1024 * 1024;
+    if (f.size > maxSize) {
+      const limitStr = uploadType === 'photo' ? '20MB' : '150MB';
       addToast(
         language === 'tr'
-          ? 'Lütfen 150MB\'tan küçük bir dosya seçin.'
-          : 'Please choose a file smaller than 150MB.',
+          ? `Lütfen ${limitStr}'tan küçük bir dosya seçin.`
+          : `Please choose a file smaller than ${limitStr}.`,
         'error'
       );
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -347,7 +348,7 @@ export default function UploadScreen() {
         file_size: file ? file.size : undefined,
       };
 
-      await createUpload(upload, (progress) => {
+      await createUpload(upload, file, (progress) => {
         setUploadProgress(progress);
       });
 
@@ -376,8 +377,10 @@ export default function UploadScreen() {
     }
   };
 
-  // Video and Photo upload count checks (10 videos / 50 photos limit)
+  // Video and Photo upload count checks
   const myUploadedIds: string[] = JSON.parse(localStorage.getItem('vv_my_uploaded_ids') || '[]');
+  const maxPhotos = wedding.max_photos_per_guest ?? 50;
+  const maxVideos = wedding.max_videos_per_guest ?? 10;
   
   const myVideos = uploads.filter((u) => {
     if (u.type !== 'video') return false;
@@ -386,7 +389,7 @@ export default function UploadScreen() {
     // Match device uploads for anonymous guest fallback
     return myUploadedIds.includes(u.id);
   });
-  const videoLimitReached = myVideos.length >= 10;
+  const videoLimitReached = myVideos.length >= maxVideos;
 
   const myPhotos = uploads.filter((u) => {
     if (u.type !== 'photo') return false;
@@ -395,7 +398,7 @@ export default function UploadScreen() {
     // Match device uploads for anonymous guest fallback
     return myUploadedIds.includes(u.id);
   });
-  const photoLimitReached = myPhotos.length >= 50;
+  const photoLimitReached = myPhotos.length >= maxPhotos;
 
   const canSubmit = !isUploading && (
     uploadType === 'message'
@@ -452,7 +455,9 @@ export default function UploadScreen() {
             </div>
             
             <h3 className="font-heading text-xl text-charcoal mb-2">
-              {uploadProgress < 100 ? 'Uploading your memory...' : 'Processing...'}
+              {uploadProgress < 100
+                ? (language === 'tr' ? 'Anınız yükleniyor...' : 'Uploading your memory...')
+                : (language === 'tr' ? 'İşleniyor...' : 'Processing...')}
             </h3>
             
             <div className="w-full h-2.5 bg-blush rounded-full overflow-hidden mb-3 border border-accent-border/40 shadow-inner">
@@ -463,8 +468,16 @@ export default function UploadScreen() {
             </div>
             
             <div className="flex justify-between items-center text-xs text-muted-warm font-medium px-1">
-              <span>{uploadProgress < 100 ? `${uploadProgress}% completed` : 'Writing to database...'}</span>
-              <span>{uploadProgress < 100 ? 'Please wait' : 'Almost ready'}</span>
+              <span>
+                {uploadProgress < 100
+                  ? `${uploadProgress}% ${language === 'tr' ? 'tamamlandı' : 'completed'}`
+                  : (language === 'tr' ? 'Veritabanına kaydediliyor...' : 'Writing to database...')}
+              </span>
+              <span>
+                {uploadProgress < 100
+                  ? (language === 'tr' ? 'Lütfen bekleyin' : 'Please wait')
+                  : (language === 'tr' ? 'Neredeyse hazır' : 'Almost ready')}
+              </span>
             </div>
           </div>
         </div>
@@ -482,11 +495,24 @@ export default function UploadScreen() {
       ) : (
         <>
           {/* Greeting */}
-          <div className="px-5 pt-5 pb-3">
-            <h3 className="font-heading text-xl text-charcoal">
-              {guest ? t('hiName', { name: guest.first_name }) : t('welcome')}
-            </h3>
-            <p className="text-sm text-muted-warm mt-0.5">{t('whatToShare')}</p>
+          <div className="px-5 pt-5 pb-3 flex justify-between items-end">
+            <div>
+              <h3 className="font-heading text-xl text-charcoal">
+                {guest ? t('hiName', { name: guest.first_name }) : t('welcome')}
+              </h3>
+              <p className="text-sm text-muted-warm mt-0.5">{t('whatToShare')}</p>
+            </div>
+            {guest && (wedding.allow_guest_change_name ?? true) && (
+              <button
+                onClick={() => {
+                  logoutGuestSession();
+                  navigate('/join?redirect=/upload');
+                }}
+                className="text-xs text-gold underline font-medium pb-1 cursor-pointer hover:text-gold/85"
+              >
+                {language === 'tr' ? 'İsmi Değiştir' : 'Change Name'}
+              </button>
+            )}
           </div>
 
           {/* Type Selector */}
@@ -573,12 +599,12 @@ export default function UploadScreen() {
                   </h4>
                   <p className="text-xs text-muted-warm px-4 leading-relaxed">
                     {language === 'tr'
-                      ? 'En güzel 10 videonuzu paylaştınız! Galeriye katkınız için teşekkürler. Yeni bir video eklemek isterseniz eskileri silebilirsiniz.'
-                      : "You've shared your top 10 video moments! Thank you for keeping the gallery sweet. You can replace older videos if you capture something new."}
+                      ? `En güzel ${maxVideos} videonuzu paylaştınız! Galeriye katkınız için teşekkürler. Yeni bir video eklemek isterseniz eskileri silebilirsiniz.`
+                      : `You've shared your top ${maxVideos} video moments! Thank you for keeping the gallery sweet. You can replace older videos if you capture something new.`}
                   </p>
                 </div>
                 <div className="text-[11px] font-semibold text-gold bg-white px-3 py-1 rounded-full border border-gold/20 shadow-sm">
-                  {language === 'tr' ? 'Yüklenen: 10 / 10 Video' : 'Uploaded: 10 / 10 Videos'}
+                  {language === 'tr' ? `Yüklenen: ${maxVideos} / ${maxVideos} Video` : `Uploaded: ${maxVideos} / ${maxVideos} Videos`}
                 </div>
               </div>
             ) : uploadType === 'photo' && photoLimitReached ? (
@@ -592,12 +618,12 @@ export default function UploadScreen() {
                   </h4>
                   <p className="text-xs text-muted-warm px-4 leading-relaxed">
                     {language === 'tr'
-                      ? 'En güzel 50 fotoğrafınızı paylaştınız! Harika anlar yakaladığınız için teşekkürler. Yeni bir fotoğraf eklemek isterseniz eskileri silebilirsiniz.'
-                      : "You've shared your top 50 photo moments! Thank you for capturing so many highlights. You can replace older photos if you capture something new."}
+                      ? `En güzel ${maxPhotos} fotoğrafınızı paylaştınız! Harika anlar yakaladığınız için teşekkürler. Yeni bir fotoğraf eklemek isterseniz eskileri silebilirsiniz.`
+                      : `You've shared your top ${maxPhotos} photo moments! Thank you for capturing so many highlights. You can replace older photos if you capture something new.`}
                   </p>
                 </div>
                 <div className="text-[11px] font-semibold text-gold bg-white px-3 py-1 rounded-full border border-gold/20 shadow-sm">
-                  {language === 'tr' ? 'Yüklenen: 50 / 50 Fotoğraf' : 'Uploaded: 50 / 50 Photos'}
+                  {language === 'tr' ? `Yüklenen: ${maxPhotos} / ${maxPhotos} Fotoğraf` : `Uploaded: ${maxPhotos} / ${maxPhotos} Photos`}
                 </div>
               </div>
             ) : (
@@ -700,18 +726,32 @@ export default function UploadScreen() {
                     <UploadCloud size={36} className="text-gold mb-2" strokeWidth={1.5} />
                     <p className="text-sm text-muted-warm font-medium">{t('tapToChoose')}</p>
                     {uploadType === 'video' && (
-                      <p className="text-[11px] text-muted-warm/60">
-                        {language === 'tr' 
-                          ? `Yüklenen Video: ${myVideos.length} / 10`
-                          : `Videos Uploaded: ${myVideos.length} / 10`}
-                      </p>
+                      <>
+                        <p className="text-[11px] text-muted-warm/60">
+                          {language === 'tr' 
+                            ? `Yüklenen Video: ${myVideos.length} / ${maxVideos}`
+                            : `Videos Uploaded: ${myVideos.length} / ${maxVideos}`}
+                        </p>
+                        <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
+                          {language === 'tr'
+                            ? 'Maks Video Sınırı: 150MB & 3 Dakika'
+                            : 'Max Video Limit: 150MB & 3 Mins'}
+                        </p>
+                      </>
                     )}
                     {uploadType === 'photo' && (
-                      <p className="text-[11px] text-muted-warm/60">
-                        {language === 'tr' 
-                          ? `Yüklenen Fotoğraf: ${myPhotos.length} / 50`
-                          : `Photos Uploaded: ${myPhotos.length} / 50`}
-                      </p>
+                      <>
+                        <p className="text-[11px] text-muted-warm/60">
+                          {language === 'tr' 
+                            ? `Yüklenen Fotoğraf: ${myPhotos.length} / ${maxPhotos}`
+                            : `Photos Uploaded: ${myPhotos.length} / ${maxPhotos}`}
+                        </p>
+                        <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
+                          {language === 'tr'
+                            ? 'Maks Fotoğraf Sınırı: 20MB'
+                            : 'Max Photo Limit: 20MB'}
+                        </p>
+                      </>
                     )}
                   </div>
                 )}

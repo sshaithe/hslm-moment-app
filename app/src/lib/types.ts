@@ -22,6 +22,9 @@ export interface Wedding {
   gallery_banner?: string;         // base64 or URL for the gallery screen header
   upload_placeholder_image?: string; // placeholder shown on video cards while uploading
   thank_you_quote?: string;        // custom thank you/welcome quote shown on the landing page
+  allow_guest_change_name?: boolean; // toggle to allow guests to reset/change their name
+  max_photos_per_guest?: number;   // dynamic limit for photos per guest
+  max_videos_per_guest?: number;   // dynamic limit for videos per guest
 }
 
 export interface Guest {

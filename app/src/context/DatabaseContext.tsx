@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { apiBase, isRemoteBackend } from '../lib/apiClient';
 import type { Wedding, Guest, Upload, Reaction, Comment, GuestSession } from '../lib/types';
 import * as localStore from '../lib/localStore';
 
 interface DatabaseContextProps {
-  isSupabase: boolean;
+  isSupabase: boolean;          // kept for screen compatibility — same as isRemoteBackend
   loading: boolean;
   wedding: Wedding;
   uploads: Upload[];
@@ -14,11 +14,11 @@ interface DatabaseContextProps {
   currentGuest: GuestSession | null;
   isAdmin: boolean;
   isBanned: boolean;
-  
+
   // Actions
   saveWeddingSettings: (updates: Partial<Wedding>) => Promise<void>;
   registerGuest: (firstName: string, lastName: string, tableNumber?: string) => Promise<Guest>;
-  createUpload: (upload: Omit<Upload, 'created_at'>, onProgress?: (percent: number) => void) => Promise<Upload>;
+  createUpload: (upload: Omit<Upload, 'created_at'>, file?: File | null, onProgress?: (percent: number) => void) => Promise<Upload>;
   modifyUpload: (id: string, updates: Partial<Upload>) => Promise<Upload | null>;
   removeUpload: (id: string) => Promise<boolean>;
   toggleReaction: (uploadId: string, guestId: string, type: 'heart' | 'laugh' | 'wow') => Promise<void>;
@@ -57,23 +57,85 @@ export function useDatabase() {
   return context;
 }
 
-export function DatabaseProvider({ children }: { children: React.ReactNode }) {
-  const isSupabase = isSupabaseConfigured;
+function getHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...extra,
+  };
+  try {
+    const raw = localStorage.getItem('vv_guest_session');
+    let sessionId = '';
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.guest_id) {
+        sessionId = parsed.guest_id;
+      }
+    }
+    if (!sessionId) {
+      let devSession = localStorage.getItem('vv_device_session');
+      if (!devSession) {
+        devSession = 'dev_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('vv_device_session', devSession);
+      }
+      sessionId = devSession;
+    }
+    if (sessionId) {
+      headers['X-Guest-Session'] = sessionId;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return headers;
+}
 
-  const [loading, setLoading] = useState(isSupabase);
+// ─── Typed fetch helpers ──────────────────────────────────────────────────────
+async function apiGet<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(`${apiBase}${path}`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) return null;
+    return res.json() as Promise<T>;
+  } catch {
+    return null;
+  }
+}
+
+async function apiPost<T>(path: string, body: unknown): Promise<T | null> {
+  try {
+    const res = await fetch(`${apiBase}${path}`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<T>;
+  } catch (e) {
+    throw e;
+  }
+}
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
+export function DatabaseProvider({ children }: { children: React.ReactNode }) {
+  // isSupabase kept as alias so all screens work without changes
+  const isSupabase = isRemoteBackend;
+
+  const [loading, setLoading] = useState(isRemoteBackend);
   const [wedding, setWedding] = useState<Wedding>(localStore.getWedding());
-  const [uploads, setUploads] = useState<Upload[]>(localStore.getUploads());
-  // If Supabase is active, do not fetch guests, comments, reactions on first load
-  const [guests, setGuests] = useState<Guest[]>(isSupabase ? [] : localStore.getGuests());
-  const [comments, setComments] = useState<Comment[]>(isSupabase ? [] : localStore.getComments());
-  const [reactions, setReactions] = useState<Reaction[]>(isSupabase ? [] : localStore.getReactions());
+  const [uploads, setUploads] = useState<Upload[]>(isRemoteBackend ? [] : localStore.getUploads());
+  const [guests, setGuests] = useState<Guest[]>(isRemoteBackend ? [] : localStore.getGuests());
+  const [comments, setComments] = useState<Comment[]>(isRemoteBackend ? [] : localStore.getComments());
+  const [reactions, setReactions] = useState<Reaction[]>(isRemoteBackend ? [] : localStore.getReactions());
   const [currentGuest, setCurrentGuest] = useState<GuestSession | null>(localStore.getGuestSession());
   const [isAdmin, setIsAdmin] = useState<boolean>(localStore.isAdminAuthenticated());
   const [isBanned, setIsBanned] = useState<boolean>(false);
 
-  // Stable ref for the resolved wedding ID
-  const weddingIdRef = useRef<string>('');
+  const weddingIdRef = useRef<string>(localStore.getWedding()?.id || '');
 
+  // ─── Track ban status ────────────────────────────────────────────────────
   useEffect(() => {
     if (currentGuest && guests.length > 0) {
       const match = guests.find((g) => g.id === currentGuest.guest_id);
@@ -83,74 +145,57 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentGuest, guests]);
 
-  // ─── UTILITY: Upload base64 or file to Cloudflare R2 ───
+  // ─── Upload media to Backblaze (presigned URL flow) ───────────────────────
+  // Media goes DIRECTLY from browser → Backblaze. Zero bytes through local PC.
   const uploadMedia = async (
-    fileOrBase64: string,
+    fileOrBase64: File | string,
     fileName: string,
     onProgress?: (percent: number) => void
   ): Promise<string> => {
     let blob: Blob;
     let mimeType = 'image/jpeg';
 
-    if (fileOrBase64.startsWith('data:')) {
+    if (typeof fileOrBase64 !== 'string') {
+      blob = fileOrBase64;
+      mimeType = fileOrBase64.type;
+    } else if (fileOrBase64.startsWith('data:')) {
       const arr = fileOrBase64.split(',');
       const mime = arr[0].match(/:(.*?);/)?.[1] || mimeType;
       const bstr = atob(arr[1]);
       let n = bstr.length;
       const u8arr = new Uint8Array(n);
-      while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-      }
+      while (n--) u8arr[n] = bstr.charCodeAt(n);
       blob = new Blob([u8arr], { type: mime });
       mimeType = mime;
-    } else if (fileOrBase64.startsWith('blob:')) {
-      // Use XMLHttpRequest for blob URLs because WebKit/Safari fetch() has bugs loading blob URLs
-      blob = await new Promise<Blob>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', fileOrBase64, true);
-        xhr.responseType = 'blob';
-        xhr.onload = () => {
-          if (xhr.status === 200 || xhr.status === 0) {
-            resolve(xhr.response);
-          } else {
-            reject(new Error(`Failed to read blob URL (status: ${xhr.status})`));
-          }
-        };
-        xhr.onerror = () => reject(new Error('Failed to read blob URL due to network/sandbox constraints'));
-        xhr.send();
-      });
-      mimeType = blob.type;
     } else {
-      // Standard fetch fallback for relative or remote URLs
       const res = await fetch(fileOrBase64);
       if (!res.ok) throw new Error(`Failed to fetch media source: ${res.statusText}`);
       blob = await res.blob();
       mimeType = blob.type;
     }
 
-    if (isSupabase) {
-      // 1. Get S3 presigned upload URL from our Vercel API endpoint
-      const response = await fetch('/api/get-upload-url', {
+    if (isRemoteBackend) {
+      // 1. Get presigned URL from local backend
+      const response = await fetch(`${apiBase}/api/get-upload-url`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
         body: JSON.stringify({
           filename: fileName,
           contentType: mimeType,
           weddingId: wedding.id,
-          fileSize: blob.size, // Pass file size for server-side validation
+          fileSize: blob.size,
           guestId: currentGuest?.guest_id || 'anonymous',
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to get presigned URL: ${response.statusText}`);
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'Failed to get upload URL');
       }
 
       const { uploadUrl } = await response.json();
 
-      // 2. Upload file directly to Cloudflare R2 using the presigned URL with progress updates
+      // 2. Upload DIRECTLY to Backblaze — never through local PC
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', uploadUrl);
@@ -159,39 +204,34 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         if (onProgress) {
           xhr.upload.onprogress = (event) => {
             if (event.lengthComputable) {
-              const percent = Math.round((event.loaded / event.total) * 100);
-              onProgress(percent);
+              onProgress(Math.round((event.loaded / event.total) * 100));
             }
           };
         }
 
         xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`Failed to upload to S3 Storage: ${xhr.statusText}`));
-          }
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`Upload to Backblaze failed: ${xhr.statusText}`));
         };
-
-        xhr.onerror = () => {
-          reject(new Error('Network error during upload to S3 Storage'));
-        };
-
+        xhr.onerror = () => reject(new Error('Network error during upload to Backblaze'));
         xhr.send(blob);
       });
 
-      // 3. Return the public URL of the uploaded file on S3 Storage
-      const publicUrlBase = import.meta.env.VITE_S3_PUBLIC_URL || '';
-      return `${publicUrlBase.replace(/\/$/, '')}/${fileName}`;
+      // 3. Return direct Backblaze/CDN public URL (no proxy)
+      const publicUrlBase = (import.meta.env.VITE_S3_PUBLIC_URL || '').replace(/\/$/, '');
+      return `${publicUrlBase}/${fileName}`;
     }
 
-    // Fallback for local-first testing: return the local blob/base64 URL itself
+    // Local-only fallback (no backend configured)
+    if (typeof fileOrBase64 !== 'string') {
+      return URL.createObjectURL(fileOrBase64);
+    }
     return fileOrBase64;
   };
 
-  // ─── INITIAL LOAD ONCE (NO background realtime / polling here) ───
+  // ─── INITIAL DATA LOAD ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isSupabase) return;
+    if (!isRemoteBackend) return;
 
     let mounted = true;
 
@@ -209,45 +249,37 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
           resolvedSlug = localStorage.getItem('vv_current_wedding_slug') || '';
         }
 
-        let wData = null;
+        let wData: Wedding | null = null;
+
         if (resolvedSlug) {
-          const { data } = await supabase!
-            .from('weddings')
-            .select('*')
-            .eq('slug', resolvedSlug)
-            .single();
-          wData = data;
+          wData = await apiGet<Wedding>(`/api/wedding?slug=${encodeURIComponent(resolvedSlug)}`);
         }
 
         if (!wData) {
-          const { data } = await supabase!
-            .from('weddings')
-            .select('*')
-            .eq('id', 'wedding-demo-001')
-            .single();
-          wData = data;
+          wData = await apiGet<Wedding>('/api/wedding?weddingId=wedding-demo-001');
         }
 
         if (!mounted) return;
 
         if (wData) {
           setWedding(wData);
+          localStore.saveWedding(wData);
           localStorage.setItem('vv_current_wedding_slug', wData.slug);
           weddingIdRef.current = wData.id;
         } else {
-          throw new Error('Failed to load wedding settings');
+          throw new Error('Failed to load wedding settings from local backend');
         }
 
-        // Fetch uploads ONLY (guests, comments, reactions are fetched on-demand by mounted screens)
-        const { data: uData } = await supabase!
-          .from('uploads')
-          .select('*')
-          .eq('wedding_id', wData.id)
-          .order('created_at', { ascending: false });
+        // Fetch uploads on initial load
+        const uData = await apiGet<Upload[]>(`/api/uploads?weddingId=${wData.id}`);
         if (mounted && uData) setUploads(uData);
 
+        // Fetch guests on initial load to populate active guests count
+        const gData = await apiGet<Guest[]>(`/api/guests?weddingId=${wData.id}`);
+        if (mounted && gData) setGuests(gData);
+
       } catch (err) {
-        console.error('Error loading Supabase initial data:', err);
+        console.error('[DatabaseContext] Error loading initial data:', err);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -255,117 +287,98 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
 
     initialize();
 
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
-  // ─── TARGETED DATA REFRESH ACTIONS ───
+  // ─── REFRESH ACTIONS ──────────────────────────────────────────────────────
 
   const refreshWeddingSettings = async () => {
-    if (!isSupabase || !weddingIdRef.current) return;
+    if (!isRemoteBackend || !weddingIdRef.current) return;
     try {
-      const { data } = await supabase!
-        .from('weddings')
-        .select('*')
-        .eq('id', weddingIdRef.current)
-        .single();
-      if (data) setWedding(data);
+      const data = await apiGet<Wedding>(`/api/wedding?weddingId=${weddingIdRef.current}`);
+      if (data) {
+        setWedding(data);
+        localStore.saveWedding(data);
+      }
     } catch (err) {
-      console.error('Error refreshing wedding settings:', err);
+      console.error('[DatabaseContext] refreshWeddingSettings error:', err);
     }
   };
 
   const refreshUploads = async () => {
-    if (!isSupabase || !weddingIdRef.current) return;
+    if (!isRemoteBackend || !weddingIdRef.current) return;
     try {
-      const { data } = await supabase!
-        .from('uploads')
-        .select('*')
-        .eq('wedding_id', weddingIdRef.current)
-        .order('created_at', { ascending: false });
+      const data = await apiGet<Upload[]>(`/api/uploads?weddingId=${weddingIdRef.current}`);
       if (data) setUploads(data);
     } catch (err) {
-      console.error('Error refreshing uploads:', err);
+      console.error('[DatabaseContext] refreshUploads error:', err);
     }
   };
 
   const refreshGuests = async () => {
-    if (!isSupabase || !weddingIdRef.current) return;
+    if (!isRemoteBackend || !weddingIdRef.current) return;
     try {
-      const { data } = await supabase!
-        .from('guests')
-        .select('*')
-        .eq('wedding_id', weddingIdRef.current);
+      const data = await apiGet<Guest[]>(`/api/guests?weddingId=${weddingIdRef.current}`);
       if (data) setGuests(data);
     } catch (err) {
-      console.error('Error refreshing guests:', err);
+      console.error('[DatabaseContext] refreshGuests error:', err);
     }
   };
 
   const refreshReactions = async () => {
-    if (!isSupabase || !weddingIdRef.current) return;
+    if (!isRemoteBackend || !weddingIdRef.current) return;
     try {
-      const { data: uIds } = await supabase!
-        .from('uploads')
-        .select('id')
-        .eq('wedding_id', weddingIdRef.current);
-      const uploadIds = uIds ? uIds.map((u) => u.id) : [];
-      if (uploadIds.length > 0) {
-        const { data } = await supabase!
-          .from('reactions')
-          .select('*')
-          .in('upload_id', uploadIds);
-        if (data) setReactions(data);
-      } else {
-        setReactions([]);
-      }
+      // Get all upload IDs for this wedding
+      const uploadIds = uploads.map((u) => u.id);
+      if (uploadIds.length === 0) { setReactions([]); return; }
+
+      const data = await apiGet<Reaction[]>(
+        `/api/reactions?uploadIds=${uploadIds.join(',')}`
+      );
+      if (data) setReactions(data);
     } catch (err) {
-      console.error('Error refreshing reactions:', err);
+      console.error('[DatabaseContext] refreshReactions error:', err);
     }
   };
 
   const refreshCommentsAndReactions = async (uploadIds: string[]) => {
-    if (!isSupabase || uploadIds.length === 0) return;
+    if (!isRemoteBackend || uploadIds.length === 0) return;
     try {
-      const { data: cData } = await supabase!
-        .from('comments')
-        .select('*')
-        .in('upload_id', uploadIds);
-      const { data: rData } = await supabase!
-        .from('reactions')
-        .select('*')
-        .in('upload_id', uploadIds);
+      const ids = uploadIds.join(',');
+      const [cData, rData] = await Promise.all([
+        apiGet<Comment[]>(`/api/comments?uploadIds=${ids}`),
+        apiGet<Reaction[]>(`/api/reactions?uploadIds=${ids}`),
+      ]);
 
       if (cData) {
         setComments((prev) => [
           ...prev.filter((c) => !uploadIds.includes(c.upload_id)),
-          ...(cData as Comment[]),
+          ...cData,
         ]);
       }
       if (rData) {
         setReactions((prev) => [
           ...prev.filter((r) => !uploadIds.includes(r.upload_id)),
-          ...(rData as Reaction[]),
+          ...rData,
         ]);
       }
     } catch (err) {
-      console.error('Error refreshing comments & reactions:', err);
+      console.error('[DatabaseContext] refreshCommentsAndReactions error:', err);
     }
   };
 
-  // ─── MUTATIONS & ACTIONS ───
+  // ─── MUTATIONS ────────────────────────────────────────────────────────────
 
   const saveWeddingSettings = async (updates: Partial<Wedding>) => {
     const nextWedding = { ...wedding, ...updates };
     setWedding(nextWedding);
     localStore.saveWedding(nextWedding);
 
-    if (isSupabase) {
-      // Handle banner/portrait file uploads if they are custom base64
+    if (isRemoteBackend) {
       let customUpdates = { ...updates };
+
+      // Upload banner/photo fields if they are base64
       const fieldsToUpload = ['hero_photo', 'couple_photo', 'gallery_banner', 'upload_placeholder_image'] as const;
-      
       for (const field of fieldsToUpload) {
         const value = updates[field];
         if (value && value.startsWith('data:')) {
@@ -374,66 +387,55 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
             const publicUrl = await uploadMedia(value, fileName);
             customUpdates[field] = publicUrl;
           } catch (err) {
-            console.error(`Error uploading ${field} to Supabase:`, err);
+            console.error(`[DatabaseContext] Error uploading ${field}:`, err);
           }
         }
       }
 
-      // Update state again if we uploaded files
       if (Object.keys(customUpdates).some((k) => customUpdates[k as keyof Wedding] !== updates[k as keyof Wedding])) {
         setWedding((prev) => ({ ...prev, ...customUpdates }));
       }
 
-      // Call secure serverless update-settings API
       const adminPassword = localStore.getAdminPassword() || '';
-      await fetch('/api/update-settings', {
+      await fetch(`${apiBase}/api/update-settings`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          weddingId: wedding.id,
-          updates: customUpdates,
-          adminPassword,
-        }),
+        headers: getHeaders(),
+        body: JSON.stringify({ weddingId: wedding.id, updates: customUpdates, adminPassword }),
       });
     }
   };
 
   const ensureGuestSynced = async (guestId: string) => {
-    if (!isSupabase) return;
+    if (!isRemoteBackend) return;
     const guestExistsInState = guests.some((g) => g.id === guestId);
     if (!guestExistsInState) {
-      // Guest not in Supabase — insert them now
       const session = localStore.getGuestSession();
       if (session && session.guest_id === guestId) {
-        const guestToSync: Guest = {
-          id: session.guest_id,
-          wedding_id: session.wedding_id,
-          first_name: session.first_name,
-          last_name: session.last_name,
-          table_number: '',
-          joined_at: new Date().toISOString(),
-          last_seen_at: new Date().toISOString(),
-        };
-        const { data: guestData, error: guestError } = await supabase!
-          .from('guests')
-          .upsert([guestToSync], { onConflict: 'id' })
-          .select()
-          .single();
-        if (!guestError && guestData) {
-          setGuests((prev) => {
-            if (prev.some((g) => g.id === guestData.id)) return prev;
-            return [...prev, guestData as Guest];
-          });
-        } else if (guestError) {
-          console.error('Error syncing guest to Supabase:', guestError);
+        try {
+          const guestToSync: Guest = {
+            id: session.guest_id,
+            wedding_id: session.wedding_id,
+            first_name: session.first_name,
+            last_name: session.last_name,
+            table_number: '',
+            joined_at: new Date().toISOString(),
+            last_seen_at: new Date().toISOString(),
+          };
+          const data = await apiPost<Guest>('/api/guests', guestToSync);
+          if (data) {
+            setGuests((prev) => {
+              if (prev.some((g) => g.id === data.id)) return prev;
+              return [...prev, data];
+            });
+          }
+        } catch (err) {
+          console.error('[DatabaseContext] Error syncing guest:', err);
         }
       }
     }
   };
 
-  const registerGuest = async (firstName: string, lastName: string, tableNumber?: string) => {
+  const registerGuest = async (firstName: string, lastName: string, tableNumber?: string): Promise<Guest> => {
     const tempId = crypto.randomUUID();
     const guestData: Guest = {
       id: tempId,
@@ -445,7 +447,6 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       last_seen_at: new Date().toISOString(),
     };
 
-    // Store session locally
     const session: GuestSession = {
       guest_id: guestData.id,
       first_name: guestData.first_name,
@@ -455,33 +456,27 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     localStore.setGuestSession(session);
     setCurrentGuest(session);
 
-    if (isSupabase) {
-      const { data, error } = await supabase!
-        .from('guests')
-        .insert([guestData])
-        .select()
-        .single();
+    if (isRemoteBackend) {
+      try {
+        const data = await apiPost<Guest>('/api/guests', guestData);
+        if (!data) throw new Error('No data returned from guest registration');
 
-      if (error) {
-        console.error('Error inserting guest in Supabase:', error);
-        // Fallback to local state if offline/error
+        const dbSession: GuestSession = {
+          guest_id: data.id,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          wedding_id: data.wedding_id,
+        };
+        localStore.setGuestSession(dbSession);
+        setCurrentGuest(dbSession);
+        setGuests((prev) => [...prev, data]);
+        return data;
+      } catch (err) {
+        console.error('[DatabaseContext] Error registering guest:', err);
+        // Fallback to local state
         setGuests((prev) => [...prev, guestData]);
         return guestData;
       }
-      
-      // Update session with DB generated UUID
-      const dbGuest = data as Guest;
-      const dbSession: GuestSession = {
-        guest_id: dbGuest.id,
-        first_name: dbGuest.first_name,
-        last_name: dbGuest.last_name,
-        wedding_id: dbGuest.wedding_id,
-      };
-      localStore.setGuestSession(dbSession);
-      setCurrentGuest(dbSession);
-
-      setGuests((prev) => [...prev, dbGuest]);
-      return dbGuest;
     } else {
       const added = localStore.addGuest(guestData);
       setGuests((prev) => [...prev, added]);
@@ -489,22 +484,35 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const createUpload = async (upload: Omit<Upload, 'created_at'>, onProgress?: (percent: number) => void) => {
-    if (isSupabase) {
+  const createUpload = async (
+    upload: Omit<Upload, 'created_at'>,
+    file?: File | null,
+    onProgress?: (percent: number) => void
+  ): Promise<Upload> => {
+    if (isRemoteBackend) {
       let public_url = upload.public_url || '';
-      
+
       if (upload.guest_id) {
         await ensureGuestSynced(upload.guest_id);
       }
 
-      // If local_url contains media file, upload to storage
-      if (upload.local_url && (upload.local_url.startsWith('data:') || upload.local_url.startsWith('blob:'))) {
+      // Upload media file (if local File or blob/base64) directly to Backblaze
+      if (file) {
+        try {
+          const extension = upload.type === 'video' ? 'mp4' : 'jpg';
+          const fileName = `uploads/${upload.id}.${extension}`;
+          public_url = await uploadMedia(file, fileName, onProgress);
+        } catch (err) {
+          console.error('[DatabaseContext] Error uploading file to Backblaze:', err);
+          throw err;
+        }
+      } else if (upload.local_url && (upload.local_url.startsWith('data:') || upload.local_url.startsWith('blob:'))) {
         try {
           const extension = upload.type === 'video' ? 'mp4' : 'jpg';
           const fileName = `uploads/${upload.id}.${extension}`;
           public_url = await uploadMedia(upload.local_url, fileName, onProgress);
         } catch (err) {
-          console.error('Error uploading upload file to Supabase storage:', err);
+          console.error('[DatabaseContext] Error uploading file to Backblaze:', err);
           throw err;
         }
       }
@@ -513,142 +521,132 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         ...upload,
         guest_id: upload.guest_id === 'anonymous' ? null : upload.guest_id,
         public_url,
-        local_url: undefined, // remove blobs before inserting
+        local_url: undefined, // do not persist blob URLs
         created_at: new Date().toISOString(),
       };
 
-      // Optimistic state update
+      // Optimistic update
       setUploads((prev) => [newUpload, ...prev]);
 
-      const { data, error } = await supabase!
-        .from('uploads')
-        .insert([newUpload])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating upload in Supabase:', error);
-        throw error;
+      try {
+        const data = await apiPost<Upload>('/api/uploads/metadata', newUpload);
+        if (!data) throw new Error('No data returned from upload metadata creation');
+        return data;
+      } catch (err) {
+        console.error('[DatabaseContext] Error saving upload metadata:', err);
+        throw err;
       }
-      return data as Upload;
     } else {
-      const newUpload: Upload = {
-        ...upload,
-        created_at: new Date().toISOString(),
-      };
+      const newUpload: Upload = { ...upload, created_at: new Date().toISOString() };
       const added = localStore.addUpload(newUpload);
       setUploads((prev) => [added, ...prev]);
       return added;
     }
   };
 
-  const modifyUpload = async (id: string, updates: Partial<Upload>) => {
+  const modifyUpload = async (id: string, updates: Partial<Upload>): Promise<Upload | null> => {
+    // Optimistic update
     setUploads((prev) => prev.map((u) => (u.id === id ? { ...u, ...updates } : u)));
 
-    if (isSupabase) {
-      // Determine if this is an admin moderation action or simple guest report count increment
-      const isAdminKeys = 'is_approved' in updates || 'is_featured' in updates || ('is_hidden' in updates && !('report_count' in updates));
+    if (isRemoteBackend) {
+      const isAdminKeys =
+        'is_approved' in updates ||
+        'is_featured' in updates ||
+        ('is_hidden' in updates && !('report_count' in updates));
 
       if (isAdminKeys) {
         const adminPassword = localStore.getAdminPassword() || '';
-        const response = await fetch('/api/update-upload', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            uploadId: id,
-            weddingId: wedding.id,
-            updates,
-            adminPassword,
-          }),
-        });
-
-        if (!response.ok) {
-          console.error('Failed to update upload via Admin API');
+        try {
+          const response = await fetch(`${apiBase}/api/update-upload`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ uploadId: id, weddingId: wedding.id, updates, adminPassword }),
+          });
+          if (!response.ok) {
+            console.error('[DatabaseContext] Failed to update upload via admin API');
+            return null;
+          }
+          const data = await response.json();
+          return data.upload as Upload;
+        } catch (err) {
+          console.error('[DatabaseContext] modifyUpload admin error:', err);
           return null;
         }
-
-        const data = await response.json();
-        return data.upload;
       } else {
-        // Guest reporting flow remains directly through client using RLS
-        const { data, error } = await supabase!
-          .from('uploads')
-          .update(updates)
-          .eq('id', id)
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Error updating upload in Supabase:', error);
+        // Guest report flow — increment report_count
+        try {
+          const response = await fetch(`${apiBase}/api/uploads/${id}/report`, {
+            method: 'PATCH',
+            headers: getHeaders(),
+            body: JSON.stringify({ weddingId: wedding.id }),
+          });
+          if (!response.ok) return null;
+          return response.json() as Promise<Upload>;
+        } catch (err) {
+          console.error('[DatabaseContext] modifyUpload report error:', err);
           return null;
         }
-        return data as Upload;
       }
     } else {
-      const updated = localStore.updateUpload(id, updates);
-      return updated;
+      return localStore.updateUpload(id, updates);
     }
   };
 
-  const removeUpload = async (id: string) => {
+  const removeUpload = async (id: string): Promise<boolean> => {
     const upload = uploads.find((u) => u.id === id);
     setUploads((prev) => prev.filter((u) => u.id !== id));
 
-    if (isSupabase) {
+    if (isRemoteBackend) {
       try {
-        let filename = undefined;
-        if (upload && upload.public_url) {
-          const urlObj = new URL(upload.public_url);
-          const pathName = decodeURIComponent(urlObj.pathname);
-          filename = pathName.startsWith('/') ? pathName.substring(1) : pathName;
+        let filename: string | undefined;
+        if (upload?.public_url) {
+          try {
+            const urlObj = new URL(upload.public_url);
+            const pathName = decodeURIComponent(urlObj.pathname);
+            filename = pathName.startsWith('/') ? pathName.substring(1) : pathName;
+          } catch {
+            filename = upload.storage_path || undefined;
+          }
         }
 
         const adminPassword = localStore.getAdminPassword() || '';
-        const response = await fetch('/api/delete-file', {
+        const response = await fetch(`${apiBase}/api/delete-file`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            filename, 
-            adminPassword,
-            weddingId: wedding.id,
-            uploadId: id
-          }),
+          headers: getHeaders(),
+          body: JSON.stringify({ filename, adminPassword, weddingId: wedding.id, uploadId: id }),
         });
 
         if (!response.ok) {
-          console.error('Failed to delete upload via delete-file API');
+          console.error('[DatabaseContext] Failed to delete upload');
           return false;
         }
+        return true;
       } catch (err) {
-        console.error('Failed to delete media file and record from storage API:', err);
+        console.error('[DatabaseContext] removeUpload error:', err);
         return false;
       }
-      return true;
     } else {
       return localStore.deleteUpload(id);
     }
   };
 
-  const toggleReaction = async (uploadId: string, guestId: string, type: 'heart' | 'laugh' | 'wow') => {
+  const toggleReaction = async (
+    uploadId: string,
+    guestId: string,
+    type: 'heart' | 'laugh' | 'wow'
+  ): Promise<void> => {
     const reacted = hasReacted(uploadId, guestId, type);
 
-    if (isSupabase) {
+    if (isRemoteBackend) {
       await ensureGuestSynced(guestId);
+
       if (reacted) {
         // Optimistic delete
         setReactions((prev) =>
           prev.filter((r) => !(r.upload_id === uploadId && r.guest_id === guestId && r.type === type))
         );
-
-        await supabase!
-          .from('reactions')
-          .delete()
-          .match({ upload_id: uploadId, guest_id: guestId, type });
       } else {
+        // Optimistic insert
         const newReaction: Reaction = {
           id: crypto.randomUUID(),
           upload_id: uploadId,
@@ -656,11 +654,27 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
           type,
           created_at: new Date().toISOString(),
         };
-
-        // Optimistic insert
         setReactions((prev) => [...prev, newReaction]);
+      }
 
-        await supabase!.from('reactions').insert([newReaction]);
+      try {
+        await apiPost('/api/reactions', {
+          id: crypto.randomUUID(),
+          upload_id: uploadId,
+          guest_id: guestId,
+          type,
+        });
+      } catch (err) {
+        console.error('[DatabaseContext] toggleReaction error:', err);
+        // Revert on error
+        if (reacted) {
+          const reverted: Reaction = { id: crypto.randomUUID(), upload_id: uploadId, guest_id: guestId, type, created_at: new Date().toISOString() };
+          setReactions((prev) => [...prev, reverted]);
+        } else {
+          setReactions((prev) =>
+            prev.filter((r) => !(r.upload_id === uploadId && r.guest_id === guestId && r.type === type))
+          );
+        }
       }
     } else {
       if (reacted) {
@@ -682,10 +696,16 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const submitComment = async (uploadId: string, guestId: string, guestName: string, text: string) => {
-    if (isSupabase) {
+  const submitComment = async (
+    uploadId: string,
+    guestId: string,
+    guestName: string,
+    text: string
+  ): Promise<Comment> => {
+    if (isRemoteBackend) {
       await ensureGuestSynced(guestId);
     }
+
     const newComment: Comment = {
       id: crypto.randomUUID(),
       upload_id: uploadId,
@@ -695,41 +715,37 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       created_at: new Date().toISOString(),
     };
 
-    // Optimistic state update
+    // Optimistic update
     setComments((prev) => [...prev, newComment]);
 
-    if (isSupabase) {
-      const { data, error } = await supabase!
-        .from('comments')
-        .insert([newComment])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error inserting comment in Supabase:', error);
+    if (isRemoteBackend) {
+      try {
+        const data = await apiPost<Comment>('/api/comments', newComment);
+        return data || newComment;
+      } catch (err) {
+        console.error('[DatabaseContext] submitComment error:', err);
         return newComment;
       }
-      return data as Comment;
     } else {
-      const added = localStore.addComment(newComment);
-      return added;
+      return localStore.addComment(newComment);
     }
   };
 
-  const loginAsAdmin = async (password: string) => {
-    // For prototype/simplicity, we compare password directly or check hash
-    // If Supabase is active, we can check password_hash in weddings setting
+  const loginAsAdmin = async (password: string): Promise<boolean> => {
     let success = false;
-    if (isSupabase) {
-      const { data } = await supabase!
-        .from('weddings')
-        .select('admin_password_hash')
-        .eq('id', wedding.id)
-        .single();
-      
-      const savedHash = data?.admin_password_hash || '';
-      // Simple direct compare for prototype (or bcrypt if hash is active)
-      success = password === savedHash;
+
+    if (isRemoteBackend) {
+      try {
+        const response = await fetch(`${apiBase}/api/admin/login`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ weddingId: wedding.id, adminPassword: password }),
+        });
+        success = response.ok;
+      } catch (err) {
+        console.error('[DatabaseContext] loginAsAdmin error:', err);
+        success = false;
+      }
     } else {
       success = password === wedding.admin_password_hash;
     }
@@ -754,17 +770,15 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleGuestBan = async (guestId: string, shouldBan: boolean): Promise<boolean> => {
-    // Update local state first (optimistic)
+    // Optimistic update
     setGuests((prev) => prev.map((g) => (g.id === guestId ? { ...g, is_banned: shouldBan } : g)));
 
-    if (isSupabase) {
+    if (isRemoteBackend) {
       try {
         const adminPassword = localStore.getAdminPassword() || '';
-        const response = await fetch('/api/update-guest', {
+        const response = await fetch(`${apiBase}/api/update-guest`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getHeaders(),
           body: JSON.stringify({
             guestId,
             weddingId: wedding.id,
@@ -774,8 +788,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (!response.ok) {
-          console.error('Failed to update guest ban status via API');
-          // Revert optimistic update
+          // Revert
           setGuests((prev) => prev.map((g) => (g.id === guestId ? { ...g, is_banned: !shouldBan } : g)));
           return false;
         }
@@ -786,8 +799,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         }
         return true;
       } catch (err) {
-        console.error('Error in toggleGuestBan:', err);
-        // Revert optimistic update
+        console.error('[DatabaseContext] toggleGuestBan error:', err);
         setGuests((prev) => prev.map((g) => (g.id === guestId ? { ...g, is_banned: !shouldBan } : g)));
         return false;
       }
@@ -801,7 +813,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ─── HELPERS ───
+  // ─── HELPERS ──────────────────────────────────────────────────────────────
 
   const getReactionCounts = (uploadId: string) => {
     const filtered = reactions.filter((r) => r.upload_id === uploadId);

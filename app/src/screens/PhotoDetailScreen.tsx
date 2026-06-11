@@ -18,6 +18,7 @@ export default function PhotoDetailScreen() {
   const [commentText, setCommentText] = useState('');
   const [showReportConfirm, setShowReportConfirm] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
 
   // Load comment draft from localStorage
   useEffect(() => {
@@ -40,7 +41,7 @@ export default function PhotoDetailScreen() {
       if (document.visibilityState === 'visible') {
         refreshCommentsAndReactions([id]);
       }
-    }, 30 * 1000);
+    }, 20 * 1000); // 20-second polling (Plan B)
 
     return () => {
       clearInterval(interval);
@@ -101,15 +102,49 @@ export default function PhotoDetailScreen() {
       return;
     }
 
-    const guestName = `${guest.first_name} ${guest.last_name}`;
-    await submitComment(upload.id, guest.guest_id, guestName, commentText.trim());
-    setCommentText('');
-    localStorage.removeItem(`vv_comment_draft_${upload.id}`);
+    // Client-side spam protection: 5s cooldown
+    const lastCommentTimeKey = `vv_last_comment_time`;
+    const lastCommentTime = localStorage.getItem(lastCommentTimeKey);
+    const now = Date.now();
+    if (lastCommentTime && now - parseInt(lastCommentTime, 10) < 5000) {
+      addToast(
+        language === 'tr'
+          ? 'Lütfen yorumlar arasında 5 saniye bekleyin.'
+          : 'Please wait 5 seconds between comments.',
+        'error'
+      );
+      return;
+    }
+
+    try {
+      const guestName = `${guest.first_name} ${guest.last_name}`;
+      await submitComment(upload.id, guest.guest_id, guestName, commentText.trim());
+      setCommentText('');
+      localStorage.removeItem(`vv_comment_draft_${upload.id}`);
+      localStorage.setItem(lastCommentTimeKey, String(Date.now()));
+    } catch (err) {
+      console.error('Comment failed:', err);
+      addToast(t('uploadFailed'), 'error');
+    }
   };
 
   const handleRegisterAndComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regFirstName.trim() || !regLastName.trim() || errors.firstName || errors.lastName) return;
+
+    // Client-side spam protection: 5s cooldown
+    const lastCommentTimeKey = `vv_last_comment_time`;
+    const lastCommentTime = localStorage.getItem(lastCommentTimeKey);
+    const now = Date.now();
+    if (lastCommentTime && now - parseInt(lastCommentTime, 10) < 5000) {
+      addToast(
+        language === 'tr'
+          ? 'Lütfen yorumlar arasında 5 saniye bekleyin.'
+          : 'Please wait 5 seconds between comments.',
+        'error'
+      );
+      return;
+    }
 
     try {
       setIsRegistering(true);
@@ -120,6 +155,7 @@ export default function PhotoDetailScreen() {
       
       setCommentText('');
       localStorage.removeItem(`vv_comment_draft_${upload.id}`);
+      localStorage.setItem(lastCommentTimeKey, String(Date.now()));
       setShowRegisterModal(false);
       setRegFirstName('');
       setRegLastName('');
@@ -142,6 +178,26 @@ export default function PhotoDetailScreen() {
 
     addToast(t('actionSuccess'), 'success');
     setShowReportConfirm(false);
+  };
+
+  const handleDownload = async () => {
+    const mediaUrl = getMediaUrl(upload.local_url || upload.public_url);
+    if (!mediaUrl) return;
+    try {
+      const res = await fetch(mediaUrl);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = upload.caption || `vowvault-${upload.id}.${upload.type === 'video' ? 'mp4' : 'jpg'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      addToast(language === 'tr' ? 'İndirme başladı' : 'Download started', 'success');
+    } catch {
+      window.open(mediaUrl, '_blank');
+    }
   };
 
   const formatTime = (dateStr: string) => {
@@ -170,7 +226,8 @@ export default function PhotoDetailScreen() {
           <img
             src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
             alt={upload.caption || ''}
-            className="w-full max-h-[60vh] object-contain"
+            className="w-full max-h-[60vh] object-contain cursor-zoom-in"
+            onClick={() => setIsZoomed(true)}
           />
         ) : (
           <div className="w-full h-48 bg-blush flex items-center justify-center">
@@ -187,7 +244,11 @@ export default function PhotoDetailScreen() {
             <X size={18} className="text-white" />
           </button>
           {wedding.allow_downloads && upload.type !== 'message' && (
-            <button className="w-9 h-9 rounded-full bg-charcoal/40 backdrop-blur-sm flex items-center justify-center">
+            <button
+              onClick={handleDownload}
+              className="w-9 h-9 rounded-full bg-charcoal/40 backdrop-blur-sm flex items-center justify-center hover:bg-charcoal/60 active:scale-95 transition-all"
+              title="Download"
+            >
               <Download size={16} className="text-white" />
             </button>
           )}
@@ -421,6 +482,43 @@ export default function PhotoDetailScreen() {
               </button>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Lightbox / Fullscreen Zoom Modal */}
+      {isZoomed && upload.type === 'photo' && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center animate-fade-in cursor-zoom-out"
+          onClick={() => setIsZoomed(false)}
+        >
+          {/* Top toolbar */}
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-4 bg-gradient-to-b from-black/60 to-transparent z-10">
+            <button
+              onClick={() => setIsZoomed(false)}
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            >
+              <X size={20} className="text-white" />
+            </button>
+            {wedding.allow_downloads && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownload();
+                }}
+                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              >
+                <Download size={18} className="text-white" />
+              </button>
+            )}
+          </div>
+
+          {/* Full Resolution Image */}
+          <img
+            src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
+            alt={upload.caption || ''}
+            className="max-w-full max-h-full object-contain pointer-events-auto select-none"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
 

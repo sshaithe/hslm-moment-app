@@ -222,6 +222,9 @@ function getDefaultWedding(): Wedding {
     approve_before_display: false,
     slideshow_approval_mode: false,
     uploads_paused: false,
+    allow_guest_change_name: true,
+    max_photos_per_guest: 50,
+    max_videos_per_guest: 10,
   };
 }
 

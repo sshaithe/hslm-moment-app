@@ -30,15 +30,33 @@ export default function AdminGuestsScreen() {
         refreshGuests();
         setLastUpdated(new Date());
       }
-    }, 5 * 60 * 1000);
+    }, 2 * 60 * 1000); // 2-minute polling (Plan B)
 
     return () => clearInterval(interval);
   }, [isSupabase]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   const filteredGuests = guests.filter((guest) => {
     const fullName = `${guest.first_name} ${guest.last_name}`.toLowerCase();
     return fullName.includes(searchQuery.toLowerCase());
   });
+
+  const totalPages = Math.ceil(filteredGuests.length / PAGE_SIZE);
+  const safePage = Math.min(currentPage, totalPages || 1);
+  const paginatedGuests = filteredGuests.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Build page number list (show max 7 pages with ellipsis)
+  const getPageNumbers = () => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages: (number | '...')[] = [1];
+    if (safePage > 3) pages.push('...');
+    for (let i = Math.max(2, safePage - 1); i <= Math.min(totalPages - 1, safePage + 1); i++) pages.push(i);
+    if (safePage < totalPages - 2) pages.push('...');
+    pages.push(totalPages);
+    return pages;
+  };
 
   const handleToggleBan = async (guest: Guest) => {
     const isBanned = !!guest.is_banned;
@@ -89,7 +107,10 @@ export default function AdminGuestsScreen() {
             type="text"
             placeholder={t('searchGuests') || 'Search guests...'}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
             className="w-full pl-10 pr-4 py-2 bg-white rounded-xl border border-accent-border/30 focus:outline-none focus:ring-1 focus:ring-gold text-sm text-charcoal placeholder:text-muted-warm/60"
           />
         </div>
@@ -109,8 +130,8 @@ export default function AdminGuestsScreen() {
               </tr>
             </thead>
             <tbody className="divide-y divide-accent-border/10 text-sm">
-              {filteredGuests.length > 0 ? (
-                filteredGuests.map((guest) => {
+              {paginatedGuests.length > 0 ? (
+                paginatedGuests.map((guest) => {
                   const isBanned = !!guest.is_banned;
                   return (
                     <tr key={guest.id} className="hover:bg-ivory/20 transition-colors">
@@ -171,6 +192,58 @@ export default function AdminGuestsScreen() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-accent-border/15 bg-white">
+          <p className="text-xs text-muted-warm">
+            {filteredGuests.length === 0
+              ? (language === 'tr' ? 'Sonuç yok' : 'No results')
+              : language === 'tr'
+                ? `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filteredGuests.length)} / ${filteredGuests.length} kişi`
+                : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filteredGuests.length)} of ${filteredGuests.length} guests`}
+          </p>
+
+          {/* Page buttons */}
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              {/* Prev */}
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="w-8 h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blush text-muted-warm"
+              >
+                ‹
+              </button>
+
+              {getPageNumbers().map((pg, idx) =>
+                pg === '...' ? (
+                  <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs text-muted-warm/50">…</span>
+                ) : (
+                  <button
+                    key={pg}
+                    onClick={() => setCurrentPage(pg as number)}
+                    className={`w-8 h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors ${
+                      safePage === pg
+                        ? 'bg-charcoal text-ivory'
+                        : 'hover:bg-blush text-muted-warm'
+                    }`}
+                  >
+                    {pg}
+                  </button>
+                )
+              )}
+
+              {/* Next */}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="w-8 h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blush text-muted-warm"
+              >
+                ›
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

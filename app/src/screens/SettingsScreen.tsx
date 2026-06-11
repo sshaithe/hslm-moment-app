@@ -39,6 +39,14 @@ export default function SettingsScreen() {
       category: 'access',
     },
     {
+      key: 'allow_guest_change_name',
+      icon: Users,
+      label: language === 'tr' ? 'Misafir İsmini Değiştirebilsin' : 'Allow guests to change name',
+      description: language === 'tr' ? 'Misafirlerin kendi adlarını değiştirmesine izin ver' : 'Allow guests to reset and change their profile name',
+      value: wedding.allow_guest_change_name ?? true,
+      category: 'access',
+    },
+    {
       key: 'is_public_gallery',
       icon: Image,
       label: t('instantPublicGallery'),
@@ -116,6 +124,9 @@ export default function SettingsScreen() {
         break;
       case 'require_guest_name':
         w.require_guest_name = value;
+        break;
+      case 'allow_guest_change_name':
+        w.allow_guest_change_name = value;
         break;
       case 'is_public_gallery':
         w.approve_before_display = !value;
@@ -219,6 +230,14 @@ export default function SettingsScreen() {
 
       {/* Photo Customization */}
       <PhotoCustomizationSection
+        language={language}
+        onSaved={() => addToast(t('settingsSaved'), 'success')}
+        wedding={wedding}
+        saveWeddingSettings={saveWeddingSettings}
+      />
+
+      {/* Limit Customization */}
+      <LimitCustomizationSection
         language={language}
         onSaved={() => addToast(t('settingsSaved'), 'success')}
         wedding={wedding}
@@ -511,6 +530,86 @@ function TextCustomizationSection({
             className="px-3 py-1.5 rounded-full bg-gold text-white text-xs font-medium hover:opacity-90 transition-opacity"
           >
             {language === 'tr' ? 'Metni Güncelle' : 'Update Message'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LimitCustomizationSection({
+  language,
+  onSaved,
+  wedding,
+  saveWeddingSettings,
+}: {
+  language: string;
+  onSaved: () => void;
+  wedding: Wedding;
+  saveWeddingSettings: (updates: Partial<Wedding>) => Promise<void>;
+}) {
+  const [maxPhotos, setMaxPhotos] = useState(wedding.max_photos_per_guest ?? 50);
+  const [maxVideos, setMaxVideos] = useState(wedding.max_videos_per_guest ?? 10);
+
+  useEffect(() => {
+    setMaxPhotos(wedding.max_photos_per_guest ?? 50);
+    setMaxVideos(wedding.max_videos_per_guest ?? 10);
+  }, [wedding.max_photos_per_guest, wedding.max_videos_per_guest]);
+
+  const handleSaveLimits = async () => {
+    await saveWeddingSettings({
+      max_photos_per_guest: Math.max(1, maxPhotos),
+      max_videos_per_guest: Math.max(1, maxVideos),
+    });
+    onSaved();
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-card overflow-hidden">
+      <div className="p-4 border-b border-accent-border/20">
+        <h3 className="font-medium text-charcoal text-sm flex items-center gap-2">
+          <Shield size={15} className="text-gold" />
+          {language === 'tr' ? 'Yükleme Limitleri' : 'Upload Limits'}
+        </h3>
+        <p className="text-xs text-muted-warm mt-0.5">
+          {language === 'tr'
+            ? 'Misafir başına maksimum fotoğraf ve video sınırlarını belirleyin'
+            : 'Configure the maximum number of uploads allowed per guest'}
+        </p>
+      </div>
+      <div className="p-4 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[11px] font-semibold text-charcoal uppercase tracking-wider mb-2">
+              📸 {language === 'tr' ? 'Maks Fotoğraf Sınırı' : 'Max Photos Per Guest'}
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={maxPhotos}
+              onChange={(e) => setMaxPhotos(parseInt(e.target.value, 10) || 0)}
+              className="w-full p-2.5 rounded-lg border border-accent-border/40 focus:border-gold focus:outline-none text-xs text-charcoal bg-ivory/10"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-charcoal uppercase tracking-wider mb-2">
+              🎥 {language === 'tr' ? 'Maks Video Sınırı' : 'Max Videos Per Guest'}
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={maxVideos}
+              onChange={(e) => setMaxVideos(parseInt(e.target.value, 10) || 0)}
+              className="w-full p-2.5 rounded-lg border border-accent-border/40 focus:border-gold focus:outline-none text-xs text-charcoal bg-ivory/10"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-end">
+          <button
+            onClick={handleSaveLimits}
+            className="px-4 py-2 rounded-full bg-gold text-white text-xs font-medium hover:opacity-90 transition-opacity"
+          >
+            {language === 'tr' ? 'Limitleri Güncelle' : 'Update Limits'}
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, RefreshCw, Book, PenLine, Camera, X, Send, CheckCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -208,7 +208,7 @@ function SignatureCanvas({
 }
 
 // ─── GuestBook Entry Card ────────────────────────────────────────────────────
-function GuestBookCard({ entry, language }: { entry: Upload; language: string }) {
+const GuestBookCard = memo(function GuestBookCard({ entry, language }: { entry: Upload; language: string }) {
   const date = new Date(entry.created_at).toLocaleDateString(
     language === 'tr' ? 'tr-TR' : 'en-US',
     { month: 'long', day: 'numeric', year: 'numeric' }
@@ -224,6 +224,7 @@ function GuestBookCard({ entry, language }: { entry: Upload; language: string })
             alt="Guest signature"
             className="w-full object-contain"
             style={{ maxHeight: 140 }}
+            loading="lazy"
           />
         </div>
       )}
@@ -236,6 +237,7 @@ function GuestBookCard({ entry, language }: { entry: Upload; language: string })
             alt={entry.caption || 'Guest photo'}
             className="w-full object-cover"
             style={{ maxHeight: 180 }}
+            loading="lazy"
           />
         </div>
       )}
@@ -259,7 +261,7 @@ function GuestBookCard({ entry, language }: { entry: Upload; language: string })
       </div>
     </div>
   );
-}
+});
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function GuestBookScreen() {
@@ -371,7 +373,7 @@ export default function GuestBookScreen() {
         report_count: 0,
       };
 
-      await createUpload(upload);
+      await createUpload(upload, photoFile);
 
       // Clear state
       setWishText('');

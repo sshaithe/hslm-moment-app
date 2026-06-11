@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, PenLine, Video, Quote, RefreshCw } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,12 +10,14 @@ import EmojiPicker from '@/components/shared/EmojiPicker';
 
 export default function MessageWallScreen() {
   const navigate = useNavigate();
-  const { wedding, currentGuest: guest, uploads, createUpload, reactions, refreshUploads, refreshReactions, isSupabase } = useDatabase();
+  const { wedding, currentGuest: guest, uploads, createUpload, reactions, refreshUploads, refreshReactions, hasReacted, isSupabase } = useDatabase();
   const { t, language } = useLanguage();
   const [showComposer, setShowComposer] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [visibleCount, setVisibleCount] = useState(10);
+  const PAGE_SIZE = 10;
 
   // Restore draft on mount
   useEffect(() => {
@@ -51,7 +53,7 @@ export default function MessageWallScreen() {
         refreshReactions();
         setLastUpdated(new Date());
       }
-    }, 5 * 60 * 1000);
+    }, 45 * 1000); // 45-second polling (Plan B)
 
     return () => clearInterval(interval);
   }, [isSupabase]);
@@ -168,20 +170,74 @@ export default function MessageWallScreen() {
             </p>
           </div>
         ) : (
-          messages.map((msg) => (
-            <MessageCard key={msg.id} msg={msg} reactions={reactions} language={language} />
-          ))
+          <>
+            {messages.slice(0, visibleCount).map((msg) => {
+              const heartCount = reactions.filter((r) => r.upload_id === msg.id && r.type === 'heart').length;
+              const guestId = guest?.guest_id || 'anonymous';
+              const isHearted = hasReacted(msg.id, guestId, 'heart');
+              return (
+                <MessageCard
+                  key={msg.id}
+                  msg={msg}
+                  heartCount={heartCount}
+                  isHearted={isHearted}
+                  language={language}
+                />
+              );
+            })}
+
+            {/* Load More */}
+            {messages.length > visibleCount && (
+              <div className="flex flex-col items-center gap-2 pt-2 pb-4">
+                <p className="text-xs text-muted-warm">
+                  {visibleCount} / {messages.length} {language === 'tr' ? 'dilek gösteriliyor' : 'wishes shown'}
+                </p>
+                <button
+                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                  className="px-6 py-2.5 rounded-full gradient-gold text-white text-sm font-medium hover:opacity-90 transition-opacity shadow-elevated"
+                >
+                  {language === 'tr'
+                    ? `${Math.min(PAGE_SIZE, messages.length - visibleCount)} dilek daha göster`
+                    : `Show ${Math.min(PAGE_SIZE, messages.length - visibleCount)} more wishes`}
+                </button>
+              </div>
+            )}
+            {messages.length <= visibleCount && messages.length > PAGE_SIZE && (
+              <p className="text-center text-xs text-muted-warm/50 py-3">
+                {language === 'tr' ? 'Tüm dilekler gösterildi' : 'All wishes shown'} ❤️
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>
   );
 }
 
-function MessageCard({ msg, reactions, language }: { msg: Upload; reactions: { upload_id: string; type: string }[]; language: string }) {
-  const heartCount = reactions.filter((r) => r.upload_id === msg.id && r.type === 'heart').length;
+const MessageCard = memo(function MessageCard({
+  msg,
+  heartCount,
+  isHearted,
+  language,
+}: {
+  msg: Upload;
+  heartCount: number;
+  isHearted: boolean;
+  language: string;
+}) {
+  const { currentGuest: guest, toggleReaction } = useDatabase();
+  const guestId = guest?.guest_id || 'anonymous';
+
+  const handleLike = async () => {
+    try {
+      await toggleReaction(msg.id, guestId, 'heart');
+    } catch (err) {
+      console.error('Failed to toggle reaction:', err);
+    }
+  };
 
   return (
-    <div className="bg-white rounded-2xl p-5 relative overflow-hidden shadow-card">
+    <div className="bg-white rounded-2xl p-5 relative overflow-hidden shadow-card animate-fade-in">
       <Quote size={28} className="absolute top-3 right-4 text-gold/15" />
       <p className="font-heading italic text-base text-charcoal leading-relaxed relative z-10 mb-4">
         &ldquo;{msg.message_text}&rdquo;
@@ -196,11 +252,18 @@ function MessageCard({ msg, reactions, language }: { msg: Upload; reactions: { u
             })}
           </p>
         </div>
-        <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blush/50 text-muted-warm text-xs">
-          <Heart size={14} />
+        <button
+          onClick={handleLike}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs transition-all cursor-pointer ${
+            isHearted
+              ? 'bg-rose-50 text-rose-500 font-semibold shadow-sm'
+              : 'bg-blush/50 text-muted-warm hover:bg-blush'
+          }`}
+        >
+          <Heart size={14} fill={isHearted ? 'currentColor' : 'none'} className={isHearted ? 'scale-110' : ''} />
           <span>{heartCount}</span>
         </button>
       </div>
     </div>
   );
-}
+});

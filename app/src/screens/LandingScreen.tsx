@@ -4,11 +4,12 @@ import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import GoldDivider from '@/components/shared/GoldDivider';
 import { getMediaUrl } from '@/lib/mediaHelper';
+import VideoThumbnail from '@/components/shared/VideoThumbnail';
 
 export default function LandingScreen() {
   const navigate = useNavigate();
   const { wedding, uploads, guests } = useDatabase();
-  const { t, language } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
 
   const stats = [
     { icon: Image, label: t('totalUploads'), value: uploads.length },
@@ -52,13 +53,21 @@ export default function LandingScreen() {
         <div className="absolute top-0 left-0 right-0 z-10">
           <div className="flex items-center justify-between px-4 py-4">
             <span className="font-heading text-ivory text-lg font-medium">HSLM Moment</span>
-            <button
-              onClick={() => navigate('/admin')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-charcoal/60 backdrop-blur-sm text-ivory text-xs font-medium hover:bg-charcoal/80 transition-colors"
-            >
-              <Lock size={12} />
-              {t('adminAccess')}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setLanguage(language === 'tr' ? 'en' : 'tr')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-charcoal/60 backdrop-blur-sm text-ivory text-xs font-semibold hover:bg-charcoal/80 transition-colors"
+              >
+                {language === 'tr' ? 'EN' : 'TR'}
+              </button>
+              <button
+                onClick={() => navigate('/admin')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-charcoal/60 backdrop-blur-sm text-ivory text-xs font-medium hover:bg-charcoal/80 transition-colors"
+              >
+                <Lock size={12} />
+                {t('adminAccess')}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -104,7 +113,7 @@ export default function LandingScreen() {
         {wedding.couple_photo && (
           <div className="flex justify-center mb-8">
             <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-gold/30 shadow-elevated ring-2 ring-ivory">
-              <img src={getMediaUrl(wedding.couple_photo) || undefined} alt="Couple" className="w-full h-full object-cover" />
+              <img src={getMediaUrl(wedding.couple_photo) || undefined} alt="Couple" className="w-full h-full object-cover" loading="lazy" />
             </div>
           </div>
         )}
@@ -121,11 +130,10 @@ export default function LandingScreen() {
                 >
                   {upload.type === 'video' ? (
                     <div className="relative w-full h-full">
-                      <video
-                        src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
-                        className="w-full h-full object-cover"
-                        muted
-                        playsInline
+                      <VideoThumbnail
+                        src={getMediaUrl(upload.local_url || upload.public_url) || ''}
+                        className="w-full h-full"
+                        seekTo={0.5}
                       />
                       <div className="absolute inset-0 flex items-center justify-center bg-black/10">
                         <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center shadow-sm">
@@ -138,6 +146,7 @@ export default function LandingScreen() {
                       src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
                       alt=""
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                   ) : (
                     <div className="w-full h-full bg-blush flex items-center justify-center">

@@ -5,53 +5,28 @@ import { useDatabase } from '@/context/DatabaseContext';
 import Logo from '@/components/shared/Logo';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { getMediaUrl } from '@/lib/mediaHelper';
-import { supabase } from '@/lib/supabaseClient';
 
 export default function SlideshowScreen() {
   const navigate = useNavigate();
-  const { wedding, uploads: allUploads, setUploads, setWedding, isSupabase } = useDatabase();
+  const { wedding, uploads: allUploads, isSupabase, refreshUploads, refreshWeddingSettings } = useDatabase();
 
-  // Local Realtime Subscription for Slideshow
+  // ─── Plan B: 15-second polling (replaces Supabase Realtime) ───────────────
+  // Pauses automatically when the browser tab is hidden to save resources.
+  // Cleans up interval on unmount — no leaks.
   useEffect(() => {
     if (!isSupabase || !wedding.id) return;
 
-    const channel = supabase!
-      .channel(`vv-slideshow-${wedding.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'weddings', filter: `id=eq.${wedding.id}` },
-        (payload) => {
-          if (payload.eventType === 'UPDATE') {
-            setWedding(payload.new as any);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'uploads', filter: `wedding_id=eq.${wedding.id}` },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setUploads((prev) => {
-              if (prev.some((u) => u.id === payload.new.id)) return prev;
-              return [payload.new as any, ...prev];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            setUploads((prev) =>
-              prev.map((u) => (u.id === payload.new.id ? (payload.new as any) : u))
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setUploads((prev) => prev.filter((u) => u.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      if (channel) {
-        supabase!.removeChannel(channel);
+    const poll = () => {
+      if (document.visibilityState === 'visible') {
+        refreshUploads();
+        refreshWeddingSettings();
       }
     };
-  }, [wedding.id, isSupabase, setUploads, setWedding]);
+
+    const interval = setInterval(poll, 15000);
+
+    return () => clearInterval(interval);
+  }, [wedding.id, isSupabase]);
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -59,8 +34,7 @@ export default function SlideshowScreen() {
   const [fadeKey, setFadeKey] = useState(0);
   const visibleUploads = allUploads.filter((u) => {
     if (u.is_hidden) return false;
-    if (u.type === 'message') return false;
-    if (u.type === 'video') return false; // Filter out videos to prevent slow loading lags in slideshow
+    if (u.type !== 'photo') return false; // Show photos only
     if (wedding.slideshow_approval_mode && !u.is_approved && !u.is_featured) return false;
     return true;
   });

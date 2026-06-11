@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, QrCode, Monitor, Pause, Play, Image, MessageSquare, Users, Clock, EyeOff, CheckCircle, Star, Trash2, RefreshCw, BookOpen } from 'lucide-react';
+import { Download, QrCode, Monitor, Pause, Play, Image, MessageSquare, Users, Clock, Eye, EyeOff, CheckCircle, Star, Trash2, RefreshCw, BookOpen } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { Upload } from '@/lib/types';
 import { getMediaUrl } from '@/lib/mediaHelper';
+import VideoThumbnail from '@/components/shared/VideoThumbnail';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export default function AdminDashboard() {
   const [pdfProgress, setPdfProgress] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [isAutoRefresh, setIsAutoRefresh] = useState(false);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -22,12 +24,14 @@ export default function AdminDashboard() {
     setIsRefreshing(false);
   };
 
-  // Visibility-aware 5-minute polling + cleanup
+  // Visibility-aware dynamic polling + cleanup
   useEffect(() => {
     if (!isSupabase) return;
 
     // Load initial data on dashboard mount (e.g., guests isn't loaded in Provider first load)
     handleRefresh();
+
+    const intervalTime = isAutoRefresh ? 5000 : 2 * 60 * 1000;
 
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -36,10 +40,10 @@ export default function AdminDashboard() {
         refreshGuests();
         setLastUpdated(new Date());
       }
-    }, 5 * 60 * 1000);
+    }, intervalTime);
 
     return () => clearInterval(interval);
-  }, [isSupabase]);
+  }, [isSupabase, isAutoRefresh]);
 
   const handleDownloadAll = async () => {
     if (downloadProgress) return; // Prevent double execution
@@ -324,7 +328,6 @@ export default function AdminDashboard() {
   ];
 
   const recentUploads = uploads
-    .filter((u) => !u.is_hidden)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 8);
 
@@ -333,11 +336,14 @@ export default function AdminDashboard() {
       case 'hide':
         await modifyUpload(upload.id, { is_hidden: true });
         break;
+      case 'unhide':
+        await modifyUpload(upload.id, { is_hidden: false });
+        break;
       case 'approve':
         await modifyUpload(upload.id, { is_approved: true });
         break;
       case 'feature':
-        await modifyUpload(upload.id, { is_featured: true });
+        await modifyUpload(upload.id, { is_featured: !upload.is_featured });
         break;
       case 'delete':
         await removeUpload(upload.id);
@@ -346,6 +352,7 @@ export default function AdminDashboard() {
   };
 
   const getStatusBadge = (upload: Upload) => {
+    if (upload.is_hidden) return <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-500 text-[10px] font-medium">{t('hidden')}</span>;
     if (!upload.is_approved) return <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 text-[10px] font-medium">{t('pending')}</span>;
     if (upload.is_featured) return <span className="px-2 py-0.5 rounded-full bg-gold/10 text-gold text-[10px] font-medium">{t('featured')}</span>;
     return <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-medium">{t('visible')}</span>;
@@ -360,16 +367,30 @@ export default function AdminDashboard() {
           <p className="text-sm text-muted-warm mt-1">{new Date(wedding.wedding_date).toLocaleDateString()} &bull; {wedding.venue}</p>
         </div>
         {isSupabase && (
-          <div className="flex items-center gap-2 self-start sm:self-center text-xs text-muted-warm font-medium bg-white px-3 py-1.5 rounded-xl shadow-card border border-accent-border/10">
-            <span>Updated: {lastUpdated.toLocaleTimeString(language === 'tr' ? 'tr-TR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="p-1 hover:bg-blush rounded transition-colors disabled:opacity-50 flex items-center justify-center"
-              title="Refresh dashboard"
-            >
-              <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
-            </button>
+          <div className="flex items-center gap-4 self-start sm:self-center text-xs text-muted-warm font-medium bg-white px-3 py-1.5 rounded-xl shadow-card border border-accent-border/10">
+            {/* Auto-Refresh Toggle */}
+            <div className="flex items-center gap-2 border-r border-accent-border/20 pr-3">
+              <span>{language === 'tr' ? 'Otomatik Yenile' : 'Auto-Refresh'}</span>
+              <button
+                onClick={() => setIsAutoRefresh(!isAutoRefresh)}
+                className={`w-9 h-5 rounded-full transition-colors relative focus:outline-none ${isAutoRefresh ? 'bg-gold' : 'bg-accent-border'}`}
+                title={language === 'tr' ? 'Otomatik Yenileme: 5 saniye' : 'Auto-Refresh: 5 seconds'}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white shadow-sm absolute top-0.5 left-0.5 transition-transform ${isAutoRefresh ? 'translate-x-4' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span>Updated: {lastUpdated.toLocaleTimeString(language === 'tr' ? 'tr-TR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="p-1 hover:bg-blush rounded transition-colors disabled:opacity-50 flex items-center justify-center"
+                title="Refresh dashboard"
+              >
+                <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -440,9 +461,13 @@ export default function AdminDashboard() {
             <div key={upload.id} className="flex items-center gap-3 p-4 hover:bg-ivory/50 transition-colors">
               <div className="w-12 h-12 rounded-lg overflow-hidden bg-blush flex-shrink-0">
                 {upload.type === 'video' ? (
-                  <video src={getMediaUrl(upload.local_url || upload.public_url) || undefined} className="w-full h-full object-cover" muted playsInline />
+                  <VideoThumbnail
+                    src={getMediaUrl(upload.local_url || upload.public_url) || ''}
+                    className="w-full h-full"
+                    seekTo={0.5}
+                  />
                 ) : upload.type === 'photo' ? (
-                  <img src={getMediaUrl(upload.local_url || upload.public_url) || undefined} alt="" className="w-full h-full object-cover" />
+                  <img src={getMediaUrl(upload.local_url || upload.public_url) || undefined} alt="" className="w-full h-full object-cover" loading="lazy" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <MessageSquare size={16} className="text-gold" />
@@ -462,12 +487,19 @@ export default function AdminDashboard() {
                     <CheckCircle size={16} />
                   </button>
                 )}
-                <button onClick={() => handleAction(upload, 'feature')} className={`p-1.5 rounded-lg hover:bg-gold/10 ${upload.is_featured ? 'text-gold' : 'text-muted-warm'}`} title={t('feature') || 'Feature'}>
+                <button onClick={() => handleAction(upload, 'feature')} className={`p-1.5 rounded-lg hover:bg-gold/10 ${upload.is_featured ? 'text-gold' : 'text-muted-warm'}`} title={upload.is_featured ? 'Unfeature' : (t('feature') || 'Feature')}>
                   <Star size={16} />
                 </button>
-                <button onClick={() => handleAction(upload, 'hide')} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-warm hover:text-red-500" title={t('hide') || 'Hide'}>
-                  <EyeOff size={16} />
-                </button>
+                {/* Toggle hide/show */}
+                {upload.is_hidden ? (
+                  <button onClick={() => handleAction(upload, 'unhide')} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500" title="Make Visible">
+                    <Eye size={16} />
+                  </button>
+                ) : (
+                  <button onClick={() => handleAction(upload, 'hide')} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-warm hover:text-red-500" title={t('hide') || 'Hide'}>
+                    <EyeOff size={16} />
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     if (confirm('Are you sure you want to permanently delete this memory from the app and cloud storage?')) {

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Search, EyeOff, Trash2, CheckCircle, Star, MessageSquare, Filter, RefreshCw, Loader2 } from 'lucide-react';
+import { Search, EyeOff, Eye, Trash2, CheckCircle, Star, MessageSquare, Filter, RefreshCw, Loader2 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { TranslationKey } from '@/i18n/LanguageContext';
 import type { Upload } from '@/lib/types';
 import { getMediaUrl } from '@/lib/mediaHelper';
+import VideoThumbnail from '@/components/shared/VideoThumbnail';
 
 type StatusFilter = 'all' | 'visible' | 'hidden' | 'pending' | 'reported' | 'featured';
 type TypeFilter = 'all' | 'photo' | 'video' | 'message';
@@ -18,6 +19,8 @@ export default function UploadsManagementScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -37,7 +40,7 @@ export default function UploadsManagementScreen() {
         refreshUploads();
         setLastUpdated(new Date());
       }
-    }, 5 * 60 * 1000);
+    }, 2 * 60 * 1000); // 2-minute polling (Plan B)
 
     return () => clearInterval(interval);
   }, [isSupabase]);
@@ -53,6 +56,26 @@ export default function UploadsManagementScreen() {
     return true;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredUploads.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageUploads = filteredUploads.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Reset to page 1 whenever filters or search change
+  const setSearchAndReset = (v: string) => { setSearch(v); setCurrentPage(1); };
+  const setTypeFilterAndReset = (v: TypeFilter) => { setTypeFilter(v); setCurrentPage(1); };
+  const setStatusFilterAndReset = (v: StatusFilter) => { setStatusFilter(v); setCurrentPage(1); };
+
+  // Build page number list (show max 7 pages with ellipsis)
+  const getPageNumbers = () => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages: (number | '...')[] = [1];
+    if (safePage > 3) pages.push('...');
+    for (let i = Math.max(2, safePage - 1); i <= Math.min(totalPages - 1, safePage + 1); i++) pages.push(i);
+    if (safePage < totalPages - 2) pages.push('...');
+    pages.push(totalPages);
+    return pages;
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -63,10 +86,10 @@ export default function UploadsManagementScreen() {
   };
 
   const selectAll = () => {
-    if (selectedIds.size === filteredUploads.length) {
+    if (selectedIds.size === pageUploads.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredUploads.map((u) => u.id)));
+      setSelectedIds(new Set(pageUploads.map((u) => u.id)));
     }
   };
 
@@ -75,6 +98,9 @@ export default function UploadsManagementScreen() {
       switch (action) {
         case 'hide':
           await modifyUpload(id, { is_hidden: true });
+          break;
+        case 'unhide':
+          await modifyUpload(id, { is_hidden: false });
           break;
         case 'delete':
           await removeUpload(id);
@@ -123,7 +149,7 @@ export default function UploadsManagementScreen() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => setSearchAndReset(e.target.value)}
             placeholder={t('searchUploads')}
             className="w-full bg-blush/30 rounded-xl pl-9 pr-4 py-2.5 text-sm text-charcoal placeholder:text-muted-warm/50 focus:outline-none focus:ring-2 focus:ring-gold/30"
           />
@@ -136,7 +162,7 @@ export default function UploadsManagementScreen() {
           {(['all', 'photo', 'video', 'message'] as TypeFilter[]).map((tf) => (
             <button
               key={tf}
-              onClick={() => setTypeFilter(tf)}
+              onClick={() => setTypeFilterAndReset(tf)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 typeFilter === tf ? 'bg-charcoal text-ivory' : 'bg-blush/50 text-muted-warm hover:bg-blush'
               }`}
@@ -149,7 +175,7 @@ export default function UploadsManagementScreen() {
           {(['all', 'visible', 'hidden', 'pending', 'reported', 'featured'] as StatusFilter[]).map((s) => (
             <button
               key={s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => setStatusFilterAndReset(s)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 statusFilter === s ? 'bg-gold text-white' : 'bg-blush/50 text-muted-warm hover:bg-blush'
               }`}
@@ -166,6 +192,9 @@ export default function UploadsManagementScreen() {
           <span className="text-xs text-muted-warm mr-2">{selectedIds.size} {t('selected')}</span>
           <button onClick={() => bulkAction('hide')} className="px-3 py-1.5 rounded-full bg-red-50 text-red-500 text-xs font-medium flex items-center gap-1">
             <EyeOff size={12} /> {t('hide')}
+          </button>
+          <button onClick={() => bulkAction('unhide')} className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-500 text-xs font-medium flex items-center gap-1">
+            <Eye size={12} /> {language === 'tr' ? 'Göster' : 'Show'}
           </button>
           <button onClick={() => bulkAction('delete')} className="px-3 py-1.5 rounded-full bg-red-100 text-red-600 text-xs font-medium flex items-center gap-1">
             <Trash2 size={12} /> {t('delete')}
@@ -188,7 +217,7 @@ export default function UploadsManagementScreen() {
                 <th className="p-3 text-left">
                   <input
                     type="checkbox"
-                    checked={filteredUploads.length > 0 && selectedIds.size === filteredUploads.length}
+                    checked={pageUploads.length > 0 && selectedIds.size === pageUploads.length}
                     onChange={selectAll}
                     className="rounded border-accent-border"
                   />
@@ -202,7 +231,7 @@ export default function UploadsManagementScreen() {
               </tr>
             </thead>
             <tbody className="divide-y divide-accent-border/10">
-              {filteredUploads.map((upload) => (
+              {pageUploads.map((upload) => (
                 <tr key={upload.id} className="hover:bg-ivory/50">
                   <td className="p-3">
                     <input
@@ -231,9 +260,15 @@ export default function UploadsManagementScreen() {
                             </div>
                           );
                         }
-                        return <video src={url} className="w-full h-full object-cover" muted playsInline />;
+                        return (
+                          <VideoThumbnail
+                            src={url}
+                            className="w-full h-full"
+                            seekTo={0.5}
+                          />
+                        );
                       })() : upload.type === 'photo' ? (
-                        <img src={getMediaUrl(upload.local_url || upload.public_url) || undefined} alt="" className="w-full h-full object-cover" />
+                        <img src={getMediaUrl(upload.local_url || upload.public_url) || undefined} alt="" className="w-full h-full object-cover" loading="lazy" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <MessageSquare size={14} className="text-gold" />
@@ -260,10 +295,25 @@ export default function UploadsManagementScreen() {
                           <CheckCircle size={14} />
                         </button>
                       )}
-                      <button onClick={() => { modifyUpload(upload.id, { is_hidden: true }); }} className="p-1 rounded hover:bg-red-50 text-red-400" title={t('hide') || 'Hide'}>
-                        <EyeOff size={14} />
-                      </button>
-                      <button onClick={() => { modifyUpload(upload.id, { is_featured: true }); }} className="p-1 rounded hover:bg-gold/10 text-gold" title={t('feature') || 'Feature'}>
+                      {/* Toggle hide/show */}
+                      {upload.is_hidden ? (
+                        <button
+                          onClick={() => { modifyUpload(upload.id, { is_hidden: false }); }}
+                          className="p-1 rounded hover:bg-blue-50 text-blue-500"
+                          title="Make Visible"
+                        >
+                          <Eye size={14} />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => { modifyUpload(upload.id, { is_hidden: true }); }}
+                          className="p-1 rounded hover:bg-red-50 text-red-400"
+                          title={t('hide') || 'Hide'}
+                        >
+                          <EyeOff size={14} />
+                        </button>
+                      )}
+                      <button onClick={() => { modifyUpload(upload.id, { is_featured: !upload.is_featured }); }} className={`p-1 rounded hover:bg-gold/10 ${upload.is_featured ? 'text-gold' : 'text-muted-warm'}`} title={upload.is_featured ? 'Unfeature' : (t('feature') || 'Feature')}>
                         <Star size={14} />
                       </button>
                       <button
@@ -284,6 +334,59 @@ export default function UploadsManagementScreen() {
             </tbody>
           </table>
         </div>
+        {/* Results counter + Pagination */}
+        <div className="px-4 py-3 border-t border-accent-border/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Counter */}
+          <p className="text-xs text-muted-warm">
+            {filteredUploads.length === 0
+              ? (language === 'tr' ? 'Sonuç yok' : 'No results')
+              : language === 'tr'
+                ? `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filteredUploads.length)} / ${filteredUploads.length} öğe`
+                : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filteredUploads.length)} of ${filteredUploads.length} items`}
+          </p>
+
+          {/* Page buttons */}
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              {/* Prev */}
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="w-8 h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blush text-muted-warm"
+              >
+                ‹
+              </button>
+
+              {getPageNumbers().map((pg, idx) =>
+                pg === '...' ? (
+                  <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs text-muted-warm/50">…</span>
+                ) : (
+                  <button
+                    key={pg}
+                    onClick={() => setCurrentPage(pg as number)}
+                    className={`w-8 h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors ${
+                      safePage === pg
+                        ? 'bg-charcoal text-ivory'
+                        : 'hover:bg-blush text-muted-warm'
+                    }`}
+                  >
+                    {pg}
+                  </button>
+                )
+              )}
+
+              {/* Next */}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="w-8 h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blush text-muted-warm"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+
         {filteredUploads.length === 0 && (
           <div className="p-8 text-center text-sm text-muted-warm">
             {t('noResults')}
