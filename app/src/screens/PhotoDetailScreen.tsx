@@ -29,7 +29,7 @@ export default function PhotoDetailScreen() {
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-hide controls when video is playing
+  // Auto-hide controls when video is playing (removed currentTime from dependencies to avoid loop resetting on mobile)
   useEffect(() => {
     if (isPlaying) {
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -42,7 +42,7 @@ export default function PhotoDetailScreen() {
     return () => {
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
-  }, [isPlaying, currentTime]);
+  }, [isPlaying]);
 
   const handlePlayPause = () => {
     const video = videoRef.current;
@@ -326,21 +326,17 @@ export default function PhotoDetailScreen() {
               }}
             />
 
-            {/* Big Center Play Button Overlay */}
-            {(!isPlaying || showControls) && (
+            {/* Big Center Play Button Overlay (only rendered when video is paused) */}
+            {!isPlaying && (
               <div 
                 className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none transition-opacity duration-300"
-                style={{ opacity: !isPlaying || showControls ? 1 : 0 }}
+                style={{ opacity: 1 }}
               >
                 <button
                   onClick={handlePlayPause}
                   className="w-16 h-16 rounded-full bg-white/95 backdrop-blur-sm shadow-premium flex items-center justify-center hover:scale-105 active:scale-95 transition-all pointer-events-auto"
                 >
-                  {isPlaying ? (
-                    <Pause size={24} style={{ color: '#b89047', fill: '#b89047' }} />
-                  ) : (
-                    <Play size={24} style={{ color: '#b89047', fill: '#b89047' }} className="ml-1" />
-                  )}
+                  <Play size={24} style={{ color: '#b89047', fill: '#b89047' }} className="ml-1" />
                 </button>
               </div>
             )}
