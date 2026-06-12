@@ -145,6 +145,58 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentGuest, guests]);
 
+  // Helper function to compress images client-side before uploading
+  const compressImage = (blob: Blob, maxWidth = 1600, maxHeight = 1600, quality = 0.8): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(blob);
+      img.onload = () => {
+        URL.revokeObjectURL(img.src);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(blob);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (compressedBlob) => {
+            if (compressedBlob) {
+              resolve(compressedBlob);
+            } else {
+              resolve(blob);
+            }
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(img.src);
+        resolve(blob);
+      };
+    });
+  };
+
   // ─── Upload media to Backblaze (presigned URL flow) ───────────────────────
   // Media goes DIRECTLY from browser → Backblaze. Zero bytes through local PC.
   const uploadMedia = async (
@@ -172,6 +224,18 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error(`Failed to fetch media source: ${res.statusText}`);
       blob = await res.blob();
       mimeType = blob.type;
+    }
+
+    // Auto-compress images (JPEG/PNG) to keep files light and load times instant
+    if (mimeType.startsWith('image/') && !mimeType.includes('gif')) {
+      try {
+        console.log(`[DatabaseContext] Original image size: ${(blob.size / 1024).toFixed(1)} KB`);
+        blob = await compressImage(blob);
+        mimeType = 'image/jpeg'; // output format of compressImage
+        console.log(`[DatabaseContext] Compressed image size: ${(blob.size / 1024).toFixed(1)} KB`);
+      } catch (e) {
+        console.error('[DatabaseContext] Image compression failed, uploading original:', e);
+      }
     }
 
     if (isRemoteBackend) {
