@@ -1,16 +1,15 @@
+import { apiBase } from './apiClient';
+
 /**
  * VowVault Plan B — Direct CDN Media URL Helper
  *
  * PLAN B CHANGE: Media is served directly from Backblaze/CDN.
- * Photos and videos are NEVER proxied through the local PC.
- * This keeps your home internet bandwidth free for API/metadata only.
+ * However, because Backblaze domains (like f003.backblazeb2.com) are often blocked
+ * on mobile networks in Turkey, we proxy B2 URLs through our local backend API.
+ * This guarantees the images load everywhere and fixes CORS errors.
  *
  * - Local/blob/data URLs: returned as-is (used during upload flow)
- * - Remote URLs (Backblaze, CDN): returned as-is (direct CDN access)
- * - No /api/media proxy path is generated
- *
- * The /api/media endpoint on the local backend still exists as a 302
- * redirect fallback, but the frontend will not call it for normal media loads.
+ * - Remote B2 URLs: proxied via /api/media
  */
 export function getMediaUrl(url: string | null | undefined): string {
   if (!url) return '';
@@ -25,7 +24,20 @@ export function getMediaUrl(url: string | null | undefined): string {
     return url;
   }
 
-  // All remote URLs (Backblaze, CDN, etc.) are returned directly.
-  // The browser loads media straight from Backblaze/CDN — zero bytes through your PC.
+  // If the URL is from Backblaze B2, route it through the API proxy
+  if (url.includes('backblazeb2.com')) {
+    const fileIndex = url.indexOf('/file/');
+    if (fileIndex !== -1) {
+      // Extract the bucket name and file path
+      const bucketAndPath = url.substring(fileIndex + 6); // e.g. "hslm-wedding-gallery/uploads/..."
+      const slashIndex = bucketAndPath.indexOf('/');
+      if (slashIndex !== -1) {
+        const filePath = bucketAndPath.substring(slashIndex + 1); // e.g. "uploads/..."
+        return `${apiBase}/api/media?file=${encodeURIComponent(filePath)}`;
+      }
+    }
+  }
+
+  // All other remote URLs are returned directly.
   return url;
 }

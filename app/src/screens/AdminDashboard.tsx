@@ -69,7 +69,7 @@ export default function AdminDashboard() {
 
       let loadedCount = 0;
       for (const upload of mediaUploads) {
-        const url = upload.public_url || upload.local_url;
+        const url = getMediaUrl(upload.public_url || upload.local_url);
         if (!url) {
           loadedCount++;
           continue;
@@ -267,7 +267,7 @@ export default function AdminDashboard() {
         }
 
         // Photo image
-        const photoSrc = entry.public_url || entry.local_url;
+        const photoSrc = getMediaUrl(entry.public_url || entry.local_url);
         if (photoSrc && !photoSrc.startsWith('blob:')) {
           const b64 = await loadImage(photoSrc);
           if (b64) {

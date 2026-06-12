@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/useToast';
 import ToastContainer from '@/components/shared/Toast';
 import GoldDivider from '@/components/shared/GoldDivider';
 import type { Upload } from '@/lib/types';
+import { getMediaUrl } from '@/lib/mediaHelper';
 
 // ─── Drawing Palette ────────────────────────────────────────────────────────
 const PALETTE = [
@@ -702,7 +703,7 @@ const GuestBookCard = memo(function GuestBookCard({ entry, language }: { entry: 
       {(entry.local_url || entry.public_url) && (
         <div className="w-full" style={{ maxHeight: 180, overflow: 'hidden' }}>
           <img
-            src={entry.local_url || entry.public_url}
+            src={getMediaUrl(entry.local_url || entry.public_url) || undefined}
             alt={entry.caption || 'Guest photo'}
             className="w-full object-cover"
             style={{ maxHeight: 180 }}
