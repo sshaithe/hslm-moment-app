@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { X, Download, Flag, Send, RefreshCw, Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
+import { X, Download, Flag, Send, RefreshCw, Play, Pause, Volume2, VolumeX, Maximize, Loader2 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import ReactionBar from '@/components/shared/ReactionBar';
@@ -26,6 +26,7 @@ export default function PhotoDetailScreen() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -318,16 +319,36 @@ export default function PhotoDetailScreen() {
               onClick={handlePlayPause}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
+              onPlay={() => {
+                setIsPlaying(true);
+              }}
+              onPause={() => {
+                setIsPlaying(false);
+                setIsBuffering(false);
+              }}
               onEnded={() => {
                 setIsPlaying(false);
+                setIsBuffering(false);
                 setShowControls(true);
               }}
+              onWaiting={() => setIsBuffering(true)}
+              onPlaying={() => setIsBuffering(false)}
+              onSeeking={() => setIsBuffering(true)}
+              onSeeked={() => setIsBuffering(false)}
+              onCanPlay={() => setIsBuffering(false)}
             />
 
-            {/* Big Center Play Button Overlay (only rendered when video is paused) */}
-            {!isPlaying && (
+            {/* Buffering Spinner */}
+            {isBuffering && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none z-10">
+                <div className="w-16 h-16 rounded-full bg-white/95 backdrop-blur-sm shadow-premium flex items-center justify-center">
+                  <Loader2 size={32} style={{ color: '#b89047' }} className="animate-spin" />
+                </div>
+              </div>
+            )}
+
+            {/* Big Center Play Button Overlay (only rendered when video is paused and not buffering) */}
+            {!isPlaying && !isBuffering && (
               <div 
                 className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none transition-opacity duration-300"
                 style={{ opacity: 1 }}
