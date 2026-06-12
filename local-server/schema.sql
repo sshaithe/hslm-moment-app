@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS uploads (
   local_url        TEXT NULL,
   storage_path     TEXT NULL,
   public_url       TEXT NULL,
+  thumbnail_url    TEXT NULL,
   caption          TEXT NULL,
   message_text     TEXT NULL,
   drawing_data_url TEXT NULL,

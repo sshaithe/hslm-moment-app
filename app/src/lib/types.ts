@@ -49,6 +49,7 @@ export interface Upload {
   local_url?: string;
   storage_path?: string;
   public_url?: string;
+  thumbnail_url?: string;
   caption?: string;
   message_text?: string;
   drawing_data_url?: string;  // base64 PNG of handwritten signature / drawing (guest book)

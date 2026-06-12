@@ -89,6 +89,7 @@ export default function SlideshowScreen() {
             loop
             muted
             playsInline
+            poster={current.thumbnail_url ? getMediaUrl(current.thumbnail_url) : undefined}
           />
         ) : (
           <img

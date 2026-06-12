@@ -47,7 +47,7 @@ export const SAFE_WEDDING_COLUMNS = new Set([
 
 export const SAFE_UPLOAD_COLUMNS = new Set([
   'is_approved', 'is_hidden', 'is_featured', 'report_count',
-  'caption', 'message_text',
+  'caption', 'message_text', 'thumbnail_url',
 ]);
 
 export const SAFE_GUEST_COLUMNS = new Set([

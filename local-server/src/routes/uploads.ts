@@ -20,7 +20,7 @@ const s3Client = new S3Client({
 
 const UPLOAD_COLS = `
   id, wedding_id, guest_id, guest_name, type,
-  storage_path, public_url, caption, message_text, drawing_data_url,
+  storage_path, public_url, thumbnail_url, caption, message_text, drawing_data_url,
   is_approved, is_hidden, is_featured, report_count, file_size, created_at
 `.trim();
 
@@ -32,6 +32,7 @@ interface UploadRow {
   type: string;
   storage_path: string | null;
   public_url: string | null;
+  thumbnail_url: string | null;
   caption: string | null;
   message_text: string | null;
   drawing_data_url: string | null;
@@ -92,7 +93,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 router.post('/metadata', async (req: Request, res: Response): Promise<void> => {
   const {
     id, wedding_id, guest_id, guest_name, type,
-    storage_path, public_url, caption, message_text,
+    storage_path, public_url, thumbnail_url, caption, message_text,
     drawing_data_url, is_approved, file_size,
   } = req.body as Partial<UploadRow>;
 
@@ -144,15 +145,15 @@ router.post('/metadata', async (req: Request, res: Response): Promise<void> => {
     const rows = await query<UploadRow>(
       `INSERT INTO uploads (
          id, wedding_id, guest_id, guest_name, type,
-         storage_path, public_url, caption, message_text,
+         storage_path, public_url, thumbnail_url, caption, message_text,
          drawing_data_url, is_approved, file_size
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING ${UPLOAD_COLS}`,
       [
         id, wedding_id,
         guest_id && guest_id !== 'anonymous' ? guest_id : null,
         guest_name, type,
-        storage_path || null, public_url || null, caption || null,
+        storage_path || null, public_url || null, thumbnail_url || null, caption || null,
         message_text || null, drawing_data_url || null,
         is_approved !== false, // default true unless explicitly false
         file_size || null,

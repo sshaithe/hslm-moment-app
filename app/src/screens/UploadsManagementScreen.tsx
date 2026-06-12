@@ -263,6 +263,7 @@ export default function UploadsManagementScreen() {
                         return (
                           <VideoThumbnail
                             src={url}
+                            thumbnailUrl={upload.thumbnail_url}
                             className="w-full h-full"
                             seekTo={0.5}
                           />

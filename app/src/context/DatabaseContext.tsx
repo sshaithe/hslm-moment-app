@@ -145,6 +145,58 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentGuest, guests]);
 
+  // Helper function to generate a video thumbnail frame client-side
+  const generateVideoThumbnail = (file: File, seekTo = 0.5): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.playsInline = true;
+      video.muted = true;
+      video.src = URL.createObjectURL(file);
+
+      video.onloadedmetadata = () => {
+        video.currentTime = seekTo;
+      };
+
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            URL.revokeObjectURL(video.src);
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(
+            (blob) => {
+              URL.revokeObjectURL(video.src);
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error('Blob generation failed'));
+              }
+            },
+            'image/jpeg',
+            0.8
+          );
+        } catch (err) {
+          URL.revokeObjectURL(video.src);
+          reject(err);
+        }
+      };
+
+      video.onerror = (err) => {
+        URL.revokeObjectURL(video.src);
+        reject(err);
+      };
+    });
+  };
+
   // Helper function to compress images client-side before uploading
   const compressImage = (blob: Blob, maxWidth = 1600, maxHeight = 1600, quality = 0.8): Promise<Blob> => {
     return new Promise((resolve) => {
@@ -200,7 +252,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   // ─── Upload media to Backblaze (presigned URL flow) ───────────────────────
   // Media goes DIRECTLY from browser → Backblaze. Zero bytes through local PC.
   const uploadMedia = async (
-    fileOrBase64: File | string,
+    fileOrBase64: File | Blob | string,
     fileName: string,
     onProgress?: (percent: number) => void
   ): Promise<string> => {
@@ -555,6 +607,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   ): Promise<Upload> => {
     if (isRemoteBackend) {
       let public_url = upload.public_url || '';
+      let thumbnail_url = upload.thumbnail_url || '';
 
       if (upload.guest_id) {
         await ensureGuestSynced(upload.guest_id);
@@ -563,6 +616,19 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       // Upload media file (if local File or blob/base64) directly to Backblaze
       if (file) {
         try {
+          // If video, generate a thumbnail and upload it first
+          if (upload.type === 'video') {
+            try {
+              console.log('[DatabaseContext] Generating video thumbnail client-side...');
+              const thumbBlob = await generateVideoThumbnail(file, 0.5);
+              const thumbFileName = `uploads/thumb_${upload.id}.jpg`;
+              thumbnail_url = await uploadMedia(thumbBlob, thumbFileName);
+              console.log('[DatabaseContext] Video thumbnail uploaded successfully:', thumbnail_url);
+            } catch (thumbErr) {
+              console.error('[DatabaseContext] Failed to generate/upload video thumbnail:', thumbErr);
+            }
+          }
+
           const extension = upload.type === 'video' ? 'mp4' : 'jpg';
           const fileName = `uploads/${upload.id}.${extension}`;
           public_url = await uploadMedia(file, fileName, onProgress);
@@ -572,6 +638,21 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         }
       } else if (upload.local_url && (upload.local_url.startsWith('data:') || upload.local_url.startsWith('blob:'))) {
         try {
+          if (upload.type === 'video') {
+            try {
+              console.log('[DatabaseContext] Generating video thumbnail from local URL...');
+              const res = await fetch(upload.local_url);
+              const videoBlob = await res.blob();
+              const videoFile = new File([videoBlob], 'temp.mp4', { type: videoBlob.type });
+              const thumbBlob = await generateVideoThumbnail(videoFile, 0.5);
+              const thumbFileName = `uploads/thumb_${upload.id}.jpg`;
+              thumbnail_url = await uploadMedia(thumbBlob, thumbFileName);
+              console.log('[DatabaseContext] Video thumbnail uploaded successfully:', thumbnail_url);
+            } catch (thumbErr) {
+              console.error('[DatabaseContext] Failed to generate/upload video thumbnail from local URL:', thumbErr);
+            }
+          }
+
           const extension = upload.type === 'video' ? 'mp4' : 'jpg';
           const fileName = `uploads/${upload.id}.${extension}`;
           public_url = await uploadMedia(upload.local_url, fileName, onProgress);
@@ -585,6 +666,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         ...upload,
         guest_id: upload.guest_id === 'anonymous' ? null : upload.guest_id,
         public_url,
+        thumbnail_url,
         local_url: undefined, // do not persist blob URLs
         created_at: new Date().toISOString(),
       };

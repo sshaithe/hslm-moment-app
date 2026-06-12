@@ -242,6 +242,7 @@ const MediaCard = memo(function MediaCard({ upload }: { upload: Upload }) {
         ) : upload.type === 'video' ? (
           <VideoThumbnail
             src={mediaUrl!}
+            thumbnailUrl={upload.thumbnail_url}
             className="w-full aspect-video block"
             seekTo={0.5}
           />
@@ -252,13 +253,6 @@ const MediaCard = memo(function MediaCard({ upload }: { upload: Upload }) {
             className="w-full h-auto block"
             loading="lazy"
           />
-        )}
-        {upload.type === 'video' && !isUploading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/15 hover:bg-black/25 transition-colors">
-            <div className="w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg">
-              <div className="w-0 h-0 border-l-[16px] border-l-charcoal border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent ml-1.5" />
-            </div>
-          </div>
         )}
       </div>
       <div className="p-2.5">

@@ -129,18 +129,12 @@ export default function LandingScreen() {
                   className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden shadow-card"
                 >
                   {upload.type === 'video' ? (
-                    <div className="relative w-full h-full">
-                      <VideoThumbnail
-                        src={getMediaUrl(upload.local_url || upload.public_url) || ''}
-                        className="w-full h-full"
-                        seekTo={0.5}
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/10">
-                        <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center shadow-sm">
-                          <div className="w-0 h-0 border-l-[8px] border-l-charcoal border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent ml-0.5" />
-                        </div>
-                      </div>
-                    </div>
+                    <VideoThumbnail
+                      src={getMediaUrl(upload.local_url || upload.public_url) || ''}
+                      thumbnailUrl={upload.thumbnail_url}
+                      className="w-full h-full"
+                      seekTo={0.5}
+                    />
                   ) : upload.type === 'photo' ? (
                     <img
                       src={getMediaUrl(upload.local_url || upload.public_url) || undefined}

@@ -463,6 +463,7 @@ export default function AdminDashboard() {
                 {upload.type === 'video' ? (
                   <VideoThumbnail
                     src={getMediaUrl(upload.local_url || upload.public_url) || ''}
+                    thumbnailUrl={upload.thumbnail_url}
                     className="w-full h-full"
                     seekTo={0.5}
                   />

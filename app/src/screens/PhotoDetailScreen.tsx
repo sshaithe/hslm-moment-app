@@ -219,8 +219,9 @@ export default function PhotoDetailScreen() {
             src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
             className="w-full max-h-[60vh] object-contain"
             controls
-            autoPlay
+            preload="none"
             playsInline
+            poster={upload.thumbnail_url ? getMediaUrl(upload.thumbnail_url) : undefined}
           />
         ) : upload.type === 'photo' ? (
           <img
