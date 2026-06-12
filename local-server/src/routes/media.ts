@@ -55,7 +55,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     }
 
     if (response.body) {
-      Readable.fromWeb(response.body as any).pipe(res);
+      const stream = Readable.fromWeb(response.body as any);
+      stream.on('error', (err: any) => {
+        console.error(`[Media Proxy] Stream error for ${cdnUrl}:`, err.message);
+      });
+      stream.pipe(res);
     } else {
       console.warn(`[Media Proxy] Empty response body for ${cdnUrl}. Falling back to 302 redirect.`);
       res.redirect(302, cdnUrl);
