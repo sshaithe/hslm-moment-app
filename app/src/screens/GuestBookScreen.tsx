@@ -58,7 +58,7 @@ function SignatureCanvas({
   const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
   const [activeCanvasTab, setActiveCanvasTab] = useState<'draw' | 'template' | 'stickers'>('draw');
 
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   // Stable callback ref to prevent infinite rendering loops
   const onDrawnRef = useRef(onDrawn);
@@ -562,7 +562,10 @@ function SignatureCanvas({
             </div>
             <div className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar">
               <span className="text-[10px] uppercase font-bold text-muted-warm/60 mr-1 flex-shrink-0">Cursive:</span>
-              {['Congratulations', 'With Love', 'Best Wishes', 'Just Married', 'Forever & Always', 'Cheers!'].map((txt) => (
+              {(language === 'tr'
+                ? ['Tebrikler', 'Sevgiyle', 'Mutluluklar', 'Yeni Evli', 'Sonsuza Dek', 'Şerefe!', 'İyi ki Varsınız']
+                : ['Congratulations', 'With Love', 'Best Wishes', 'Just Married', 'Forever & Always', 'Cheers!', 'Thank You']
+              ).map((txt) => (
                 <button
                   key={txt}
                   onClick={() => addSticker('text', txt)}
