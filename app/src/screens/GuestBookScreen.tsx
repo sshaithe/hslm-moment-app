@@ -427,7 +427,7 @@ function SignatureCanvas({
           }`}
         >
           <PenLine size={13} />
-          {t('draw' as any) || 'Brush'}
+          {t('draw')}
         </button>
         <button
           onClick={() => setActiveCanvasTab('template')}
@@ -436,7 +436,7 @@ function SignatureCanvas({
           }`}
         >
           <Layout size={13} />
-          {t('template' as any) || 'Template'}
+          {t('template')}
         </button>
         <button
           onClick={() => setActiveCanvasTab('stickers')}
@@ -445,7 +445,7 @@ function SignatureCanvas({
           }`}
         >
           <Sparkles size={13} />
-          {t('stickers' as any) || 'Stickers'}
+          {t('stickers')}
         </button>
       </div>
 

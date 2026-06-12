@@ -184,6 +184,9 @@ export const tr = {
   guestBookError: 'Gönderilemedi. Lütfen tekrar deneyin.',
   guestBookNavLabel: 'Defter',
   drawHint: 'İmzanı veya küçük bir çizimini buraya bırak…',
+  draw: 'Fırça',
+  template: 'Şablon',
+  stickers: 'Çıkartmalar',
   eraser: 'Silgi',
 
   // Admin — PDF Export

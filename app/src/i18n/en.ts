@@ -185,6 +185,9 @@ export const en = {
   guestBookError: 'Could not submit. Please try again.',
   guestBookNavLabel: 'Book',
   drawHint: 'Draw your signature or a small sketch here…',
+  draw: 'Brush',
+  template: 'Template',
+  stickers: 'Stickers',
   eraser: 'Eraser',
 
   // Admin — PDF Export
