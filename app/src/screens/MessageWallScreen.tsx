@@ -59,6 +59,15 @@ export default function MessageWallScreen() {
   }, [isSupabase]);
   const messages = uploads.filter((u) => u.type === 'message' && !u.is_hidden && (!wedding.approve_before_display || u.is_approved));
 
+  const limit = wedding.max_messages_per_guest ?? 5;
+  const currentSentIds = JSON.parse(localStorage.getItem('vv_sent_anonymous_messages') || '[]');
+  const myMessagesCount = uploads.filter((u) => {
+    if (u.type !== 'message') return false;
+    if (guest && u.guest_id === guest.guest_id) return true;
+    return currentSentIds.includes(u.id);
+  }).length;
+  const isLimitReached = myMessagesCount >= limit;
+
   const handleSubmit = async () => {
     if (!messageText.trim()) return;
 
@@ -67,14 +76,20 @@ export default function MessageWallScreen() {
       return;
     }
 
+    if (isLimitReached) {
+      alert(t('messagesLimitReached', { limit: String(limit) }));
+      return;
+    }
+
     const guestName = guest ? `${guest.first_name} ${guest.last_name}` : 'Anonymous';
     const guestId = guest?.guest_id || 'anonymous';
+    const messageId = uuidv4();
 
     try {
       await createUpload({
-        id: uuidv4(),
+        id: messageId,
         wedding_id: wedding.id,
-        guest_id: guestId,
+        guest_id: guestId === 'anonymous' ? null : guestId,
         guest_name: guestName,
         type: 'message',
         message_text: messageText.trim(),
@@ -83,6 +98,12 @@ export default function MessageWallScreen() {
         is_featured: false,
         report_count: 0,
       });
+
+      if (guestId === 'anonymous') {
+        const localSent = JSON.parse(localStorage.getItem('vv_sent_anonymous_messages') || '[]');
+        localSent.push(messageId);
+        localStorage.setItem('vv_sent_anonymous_messages', JSON.stringify(localSent));
+      }
 
       setMessageText('');
       localStorage.removeItem('vv_message_wall_text');
@@ -143,15 +164,27 @@ export default function MessageWallScreen() {
       {/* Inline Composer */}
       {showComposer && (
         <div className="mx-5 mb-6 bg-white rounded-2xl p-4 shadow-card animate-slide-up">
+          {isLimitReached && (
+            <div className="text-[11px] font-medium text-red-500 bg-red-50 border border-red-100 rounded-xl p-3 mb-3 leading-relaxed text-center">
+              ⚠️ {t('messagesLimitReached', { limit: String(limit) })}
+            </div>
+          )}
           <textarea
             value={messageText}
             onChange={(e) => handleMessageChange(e.target.value)}
             placeholder={t('writeWishes')}
             rows={4}
-            className="w-full bg-blush/30 rounded-xl p-3 text-sm text-charcoal placeholder:text-muted-warm/50 focus:outline-none focus:ring-2 focus:ring-gold/30 resize-none"
+            disabled={isLimitReached}
+            className={`w-full bg-blush/30 rounded-xl p-3 text-sm text-charcoal placeholder:text-muted-warm/50 focus:outline-none focus:ring-2 focus:ring-gold/30 resize-none ${
+              isLimitReached ? 'opacity-50 cursor-not-allowed bg-blush/10' : ''
+            }`}
           />
           <div className="flex items-center justify-between mt-2">
-            <EmojiPicker onSelect={(emoji) => handleMessageChange(messageText + emoji)} />
+            {!isLimitReached ? (
+              <EmojiPicker align="left" onSelect={(emoji) => handleMessageChange(messageText + emoji)} />
+            ) : (
+              <div />
+            )}
             <div className="flex gap-2">
               <button
                 onClick={() => setShowComposer(false)}
@@ -161,7 +194,7 @@ export default function MessageWallScreen() {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!messageText.trim()}
+                disabled={!messageText.trim() || isLimitReached}
                 className="px-5 py-2 rounded-full gradient-gold text-white text-xs font-medium disabled:opacity-30"
               >
                 {t('shareNow')}

@@ -550,16 +550,22 @@ function LimitCustomizationSection({
 }) {
   const [maxPhotos, setMaxPhotos] = useState(wedding.max_photos_per_guest ?? 50);
   const [maxVideos, setMaxVideos] = useState(wedding.max_videos_per_guest ?? 10);
+  const [maxMessages, setMaxMessages] = useState(wedding.max_messages_per_guest ?? 5);
+  const [maxGuestbook, setMaxGuestbook] = useState(wedding.max_guestbook_signatures_per_guest ?? 5);
 
   useEffect(() => {
     setMaxPhotos(wedding.max_photos_per_guest ?? 50);
     setMaxVideos(wedding.max_videos_per_guest ?? 10);
-  }, [wedding.max_photos_per_guest, wedding.max_videos_per_guest]);
+    setMaxMessages(wedding.max_messages_per_guest ?? 5);
+    setMaxGuestbook(wedding.max_guestbook_signatures_per_guest ?? 5);
+  }, [wedding.max_photos_per_guest, wedding.max_videos_per_guest, wedding.max_messages_per_guest, wedding.max_guestbook_signatures_per_guest]);
 
   const handleSaveLimits = async () => {
     await saveWeddingSettings({
       max_photos_per_guest: Math.max(1, maxPhotos),
       max_videos_per_guest: Math.max(1, maxVideos),
+      max_messages_per_guest: Math.max(1, maxMessages),
+      max_guestbook_signatures_per_guest: Math.max(1, maxGuestbook),
     });
     onSaved();
   };
@@ -569,38 +575,62 @@ function LimitCustomizationSection({
       <div className="p-4 border-b border-accent-border/20">
         <h3 className="font-medium text-charcoal text-sm flex items-center gap-2">
           <Shield size={15} className="text-gold" />
-          {language === 'tr' ? 'Yükleme Limitleri' : 'Upload Limits'}
+          {language === 'tr' ? 'Yükleme ve Defter Limitleri' : 'Upload & Guest Book Limits'}
         </h3>
         <p className="text-xs text-muted-warm mt-0.5">
           {language === 'tr'
-            ? 'Misafir başına maksimum fotoğraf ve video sınırlarını belirleyin'
-            : 'Configure the maximum number of uploads allowed per guest'}
+            ? 'Misafir başına maksimum fotoğraf, video, mesaj ve defter imza sınırlarını belirleyin'
+            : 'Configure the maximum number of uploads, messages, and guest book entries allowed per guest'}
         </p>
       </div>
       <div className="p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <label className="block text-[11px] font-semibold text-charcoal uppercase tracking-wider mb-2">
-              📸 {language === 'tr' ? 'Maks Fotoğraf Sınırı' : 'Max Photos Per Guest'}
+            <label className="block text-[10px] font-semibold text-charcoal uppercase tracking-wider mb-2 text-center">
+              📸 {language === 'tr' ? 'Maks Foto' : 'Max Photos'}
             </label>
             <input
               type="number"
               min="1"
               value={maxPhotos}
               onChange={(e) => setMaxPhotos(parseInt(e.target.value, 10) || 0)}
-              className="w-full p-2.5 rounded-lg border border-accent-border/40 focus:border-gold focus:outline-none text-xs text-charcoal bg-ivory/10"
+              className="w-full p-2.5 rounded-lg border border-accent-border/40 focus:border-gold focus:outline-none text-xs text-charcoal bg-ivory/10 text-center"
             />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-charcoal uppercase tracking-wider mb-2">
-              🎥 {language === 'tr' ? 'Maks Video Sınırı' : 'Max Videos Per Guest'}
+            <label className="block text-[10px] font-semibold text-charcoal uppercase tracking-wider mb-2 text-center">
+              🎥 {language === 'tr' ? 'Maks Video' : 'Max Videos'}
             </label>
             <input
               type="number"
               min="1"
               value={maxVideos}
               onChange={(e) => setMaxVideos(parseInt(e.target.value, 10) || 0)}
-              className="w-full p-2.5 rounded-lg border border-accent-border/40 focus:border-gold focus:outline-none text-xs text-charcoal bg-ivory/10"
+              className="w-full p-2.5 rounded-lg border border-accent-border/40 focus:border-gold focus:outline-none text-xs text-charcoal bg-ivory/10 text-center"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-charcoal uppercase tracking-wider mb-2 text-center">
+              💬 {language === 'tr' ? 'Maks Mesaj' : 'Max Messages'}
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={maxMessages}
+              onChange={(e) => setMaxMessages(parseInt(e.target.value, 10) || 0)}
+              className="w-full p-2.5 rounded-lg border border-accent-border/40 focus:border-gold focus:outline-none text-xs text-charcoal bg-ivory/10 text-center"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-charcoal uppercase tracking-wider mb-2 text-center">
+              ✍️ {language === 'tr' ? 'Maks Defter' : 'Max Guest Book'}
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={maxGuestbook}
+              onChange={(e) => setMaxGuestbook(parseInt(e.target.value, 10) || 0)}
+              className="w-full p-2.5 rounded-lg border border-accent-border/40 focus:border-gold focus:outline-none text-xs text-charcoal bg-ivory/10 text-center"
             />
           </div>
         </div>

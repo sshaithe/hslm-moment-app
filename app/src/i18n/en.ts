@@ -200,4 +200,14 @@ export const en = {
   // Settings — Upload Placeholder
   uploadPlaceholderLabel: '⏳ Upload Placeholder Image',
   uploadPlaceholderDesc: 'Shown on video cards while a video is still uploading',
+
+  // Brush styles and Message limits
+  brushStrict: 'Strict',
+  brushCuted: 'Cuted',
+  brushPoint: 'Point',
+  messagesLimitReached: 'You have reached the limit of {{limit}} messages.',
+  maxMessagesLimitLabel: 'Max Messages Per Guest',
+  guestBookExplainer: 'Write your warmest wishes, draw a sketch, sign your name, or upload a photo to our digital guest book. The couple will cherish these memories forever!',
+  guestBookLimitReached: 'You have reached the limit of {{limit}} guest book entries.',
+  maxGuestBookLimitLabel: 'Max Guest Book Entries',
 } as const;

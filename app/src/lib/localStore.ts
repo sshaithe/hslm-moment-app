@@ -225,12 +225,14 @@ function getDefaultWedding(): Wedding {
     allow_guest_change_name: true,
     max_photos_per_guest: 50,
     max_videos_per_guest: 10,
+    max_messages_per_guest: 5,
+    max_guestbook_signatures_per_guest: 5,
   };
 }
 
 export function seedDemoData(): void {
   // Only seed if not already seeded
-  if (localStorage.getItem('vv_seeded') === 'v3') return;
+  if (localStorage.getItem('vv_seeded') === 'v5') return;
 
   const wedding = getDefaultWedding();
   saveWedding(wedding);
@@ -399,7 +401,7 @@ export function seedDemoData(): void {
   ];
   localStorage.setItem(STORAGE_KEYS.COMMENTS, JSON.stringify(demoComments));
 
-  localStorage.setItem('vv_seeded', 'v3');
+  localStorage.setItem('vv_seeded', 'v5');
 }
 
 export function resetAllData(): void {

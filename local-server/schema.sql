@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS weddings (
   allow_guest_change_name BOOLEAN DEFAULT TRUE,
   max_photos_per_guest   INTEGER DEFAULT 50,
   max_videos_per_guest   INTEGER DEFAULT 10,
+  max_messages_per_guest INTEGER DEFAULT 5,
+  max_guestbook_signatures_per_guest INTEGER DEFAULT 5,
   hero_photo             TEXT NULL,
   couple_photo           TEXT NULL,
   gallery_banner         TEXT NULL,

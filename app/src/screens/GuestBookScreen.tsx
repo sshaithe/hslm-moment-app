@@ -54,6 +54,7 @@ function SignatureCanvas({
 
   // Enhanced state
   const [bgTemplate, setBgTemplate] = useState<'cream' | 'gold' | 'blush' | 'sage' | 'lines'>('cream');
+  const [brushType, setBrushType] = useState<'solid' | 'dashed' | 'dotted'>('solid');
   const [isCalligraphy, setIsCalligraphy] = useState(true);
   const [placedStickers, setPlacedStickers] = useState<PlacedSticker[]>([]);
   const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
@@ -93,10 +94,25 @@ function SignatureCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
     isDrawing.current = true;
-    lastPoint.current = getPos(e, canvas);
+    const pos = getPos(e, canvas);
+    lastPoint.current = pos;
     setIsEmpty(false);
     setSelectedStickerId(null); // deselect stickers on draw
     if ('touches' in e) e.preventDefault();
+
+    // Draw single point on start to support tapping
+    const ctx = canvas.getContext('2d')!;
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    ctx.lineTo(pos.x + 0.1, pos.y);
+    ctx.lineWidth = isEraser ? lineSize * 4 : lineSize;
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = isEraser ? 1 : 0.92;
+    ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+    ctx.setLineDash([]);
+    ctx.stroke();
   };
 
   const draw = (e: React.TouchEvent | React.MouseEvent) => {
@@ -109,11 +125,7 @@ function SignatureCanvas({
 
     ctx.beginPath();
     ctx.moveTo(last.x, last.y);
-
-    // Smooth Bezier curve
-    const midX = (last.x + current.x) / 2;
-    const midY = (last.y + current.y) / 2;
-    ctx.quadraticCurveTo(last.x, last.y, midX, midY);
+    ctx.lineTo(current.x, current.y);
 
     if (isCalligraphy && !isEraser) {
       const dx = current.x - last.x;
@@ -131,6 +143,18 @@ function SignatureCanvas({
     ctx.lineJoin = 'round';
     ctx.globalAlpha = isEraser ? 1 : 0.92;
     ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+
+    // Set brush line style
+    if (isEraser) {
+      ctx.setLineDash([]);
+    } else if (brushType === 'dashed') {
+      ctx.setLineDash([lineSize * 2.5, lineSize * 2.5]);
+    } else if (brushType === 'dotted') {
+      ctx.setLineDash([1, lineSize * 2.5]);
+    } else {
+      ctx.setLineDash([]);
+    }
+
     ctx.stroke();
 
     lastPoint.current = current;
@@ -492,6 +516,28 @@ function SignatureCanvas({
               ))}
             </div>
 
+            {/* Brush Style */}
+            <div className="flex items-center gap-1">
+              {[
+                { id: 'solid', label: t('brushStrict'), icon: '▬' },
+                { id: 'dashed', label: t('brushCuted'), icon: '╌' },
+                { id: 'dotted', label: t('brushPoint'), icon: '●' },
+              ].map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => { setBrushType(b.id as any); setIsEraser(false); }}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border uppercase tracking-wider transition-all flex items-center gap-1 ${
+                    brushType === b.id && !isEraser
+                      ? 'bg-gold/20 text-gold border-gold font-semibold'
+                      : 'border-accent-border/40 text-muted-warm hover:border-gold bg-white'
+                  }`}
+                >
+                  <span className="text-[9px] leading-none">{b.icon}</span>
+                  {b.label}
+                </button>
+              ))}
+            </div>
+
             {/* Calligraphy Toggle & Eraser + Clear */}
             <div className="flex items-center gap-1.5">
               <button
@@ -817,7 +863,16 @@ export default function GuestBookScreen() {
     setPhotoPreview(null);
   };
 
-  const canSubmit = !isSubmitting && (wishText.trim().length > 0 || !isDrawingEmpty);
+  const limit = wedding.max_guestbook_signatures_per_guest ?? 5;
+  const currentSentIds = JSON.parse(localStorage.getItem('vv_sent_anonymous_guestbook') || '[]');
+  const myGuestBookEntries = uploads.filter((u) => {
+    if (u.type !== 'guestbook') return false;
+    if (guest && u.guest_id === guest.guest_id) return true;
+    return currentSentIds.includes(u.id);
+  }).length;
+  const isLimitReached = myGuestBookEntries >= limit;
+
+  const canSubmit = !isSubmitting && !isLimitReached && (wishText.trim().length > 0 || !isDrawingEmpty);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -830,7 +885,7 @@ export default function GuestBookScreen() {
       const upload = {
         id: uuidv4(),
         wedding_id: wedding.id,
-        guest_id: guestId,
+        guest_id: guestId === 'anonymous' ? null : guestId,
         guest_name: guestName,
         type: 'guestbook' as const,
         local_url: photoPreview || undefined,
@@ -844,6 +899,12 @@ export default function GuestBookScreen() {
       };
 
       await createUpload(upload, photoFile);
+
+      if (guestId === 'anonymous') {
+        const localSent = JSON.parse(localStorage.getItem('vv_sent_anonymous_guestbook') || '[]');
+        localSent.push(upload.id);
+        localStorage.setItem('vv_sent_anonymous_guestbook', JSON.stringify(localSent));
+      }
 
       // Clear state
       setWishText('');
@@ -914,16 +975,31 @@ export default function GuestBookScreen() {
         </p>
       </div>
 
+      {/* Explainer card */}
+      <div className="mx-5 mb-5 p-4 rounded-2xl bg-white border border-gold/15 shadow-card text-center animate-fade-in">
+        <p className="text-xs leading-relaxed text-muted-warm font-medium">
+          ✨ {t('guestBookExplainer')}
+        </p>
+      </div>
+
       {/* Sign the Book Button */}
       {!showComposer && (
         <div className="px-5 mb-6">
-          <button
-            onClick={() => setShowComposer(true)}
-            className="w-full py-4 rounded-full gradient-gold text-white text-sm font-medium flex items-center justify-center gap-2 shadow-elevated hover:opacity-90 active:scale-[0.98] transition-all"
-          >
-            <PenLine size={18} />
-            {t('signGuestBook')}
-          </button>
+          {isLimitReached ? (
+            <div className="w-full p-4 rounded-2xl bg-red-50 border border-red-100 text-center shadow-sm">
+              <p className="text-xs font-medium text-red-500">
+                ⚠️ {t('guestBookLimitReached', { limit: String(limit) })}
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowComposer(true)}
+              className="w-full py-4 rounded-full gradient-gold text-white text-sm font-medium flex items-center justify-center gap-2 shadow-elevated hover:opacity-90 active:scale-[0.98] transition-all"
+            >
+              <PenLine size={18} />
+              {t('signGuestBook')}
+            </button>
+          )}
         </div>
       )}
 
@@ -954,6 +1030,11 @@ export default function GuestBookScreen() {
           </div>
 
           <div className="px-5 py-4 space-y-5">
+            {isLimitReached && (
+              <div className="text-[11px] font-medium text-red-500 bg-red-50 border border-red-100 rounded-xl p-3 leading-relaxed text-center">
+                ⚠️ {t('guestBookLimitReached', { limit: String(limit) })}
+              </div>
+            )}
             {/* Signature Section */}
             <div>
               <label className="block text-xs font-semibold text-charcoal uppercase tracking-wider mb-2">

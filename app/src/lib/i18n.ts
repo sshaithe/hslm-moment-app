@@ -133,6 +133,14 @@ const translations = {
     settingsSaved: 'Ayarlar kaydedildi!',
     actionSuccess: 'İşlem başarılı!',
     error: 'Bir hata oluştu.',
+    brushStrict: 'Düz',
+    brushCuted: 'Kesikli',
+    brushPoint: 'Noktalı',
+    messagesLimitReached: 'Maksimum {{limit}} mesaj sınırına ulaştınız.',
+    maxMessagesLimitLabel: 'Maks Mesaj Sınırı',
+    guestBookExplainer: 'Dijital anı defterimize en içten dileklerinizi yazın, bir çizim yapın, imzanızı bırakın veya bir fotoğraf yükleyin. Çiftimiz bu anıları ömür boyu saklayacaktır!',
+    guestBookLimitReached: 'Maksimum {{limit}} misafir defteri mesajı sınırına ulaştınız.',
+    maxGuestBookLimitLabel: 'Maks Defter Mesajı Sınırı',
   },
   en: {
     // Landing
@@ -266,6 +274,14 @@ const translations = {
     settingsSaved: 'Settings saved!',
     actionSuccess: 'Action successful!',
     error: 'An error occurred.',
+    brushStrict: 'Strict',
+    brushCuted: 'Cuted',
+    brushPoint: 'Point',
+    messagesLimitReached: 'You have reached the limit of {{limit}} messages.',
+    maxMessagesLimitLabel: 'Max Messages Per Guest',
+    guestBookExplainer: 'Write your warmest wishes, draw a sketch, sign your name, or upload a photo to our digital guest book. The couple will cherish these memories forever!',
+    guestBookLimitReached: 'You have reached the limit of {{limit}} guest book entries.',
+    maxGuestBookLimitLabel: 'Max Guest Book Entries',
   },
 } as const;
 

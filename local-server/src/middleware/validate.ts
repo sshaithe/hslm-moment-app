@@ -41,6 +41,7 @@ export const SAFE_WEDDING_COLUMNS = new Set([
   'allow_downloads', 'auto_hide_reported', 'approve_before_display',
   'slideshow_approval_mode', 'uploads_paused',
   'allow_guest_change_name', 'max_photos_per_guest', 'max_videos_per_guest',
+  'max_messages_per_guest', 'max_guestbook_signatures_per_guest',
   'hero_photo', 'couple_photo', 'gallery_banner',
   'thank_you_quote', 'upload_placeholder_image',
 ]);

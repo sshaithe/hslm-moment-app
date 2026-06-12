@@ -25,6 +25,8 @@ export interface Wedding {
   allow_guest_change_name?: boolean; // toggle to allow guests to reset/change their name
   max_photos_per_guest?: number;   // dynamic limit for photos per guest
   max_videos_per_guest?: number;   // dynamic limit for videos per guest
+  max_messages_per_guest?: number; // dynamic limit for messages per guest
+  max_guestbook_signatures_per_guest?: number; // dynamic limit for guestbook entries per guest
 }
 
 export interface Guest {

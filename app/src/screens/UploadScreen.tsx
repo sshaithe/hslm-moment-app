@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Film, MessageSquare, X, UploadCloud, Shield, ArrowLeft, RefreshCw, Video, Library, Square } from 'lucide-react';
+import { Camera, Film, X, UploadCloud, Shield, ArrowLeft, RefreshCw, Video, Library, Square } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -19,7 +19,6 @@ export default function UploadScreen() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
-  const [messageText, setMessageText] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -33,10 +32,8 @@ export default function UploadScreen() {
   useEffect(() => {
     const savedType = localStorage.getItem('vv_upload_type') as UploadType | null;
     const savedCaption = localStorage.getItem('vv_upload_caption');
-    const savedMsg = localStorage.getItem('vv_upload_message_text');
-    if (savedType) setUploadType(savedType);
+    if (savedType && savedType !== 'message') setUploadType(savedType);
     if (savedCaption) setCaption(savedCaption);
-    if (savedMsg) setMessageText(savedMsg);
   }, []);
 
   const handleTypeChange = (type: UploadType) => {
@@ -47,11 +44,6 @@ export default function UploadScreen() {
   const handleCaptionChange = (val: string) => {
     setCaption(val);
     localStorage.setItem('vv_upload_caption', val);
-  };
-
-  const handleMessageChange = (val: string) => {
-    setMessageText(val);
-    localStorage.setItem('vv_upload_message_text', val);
   };
 
   // Live Camera states
@@ -340,7 +332,7 @@ export default function UploadScreen() {
         type: uploadType,
         local_url: localUploadUrl,
         caption: caption.trim() || undefined,
-        message_text: uploadType === 'message' ? messageText.trim() : undefined,
+        message_text: undefined,
         is_approved: !wedding.approve_before_display,
         is_hidden: false,
         is_featured: false,
@@ -401,19 +393,16 @@ export default function UploadScreen() {
   const photoLimitReached = myPhotos.length >= maxPhotos;
 
   const canSubmit = !isUploading && (
-    uploadType === 'message'
-      ? messageText.trim().length > 0
-      : (uploadType === 'video'
-          ? (file !== null && !videoLimitReached)
-          : (uploadType === 'photo'
-              ? (file !== null && !photoLimitReached)
-              : file !== null))
+    uploadType === 'video'
+      ? (file !== null && !videoLimitReached)
+      : (uploadType === 'photo'
+          ? (file !== null && !photoLimitReached)
+          : file !== null)
   );
 
-  const typeOptions: { type: UploadType; icon: typeof Camera; label: string }[] = [
+  const typeOptions: { type: 'photo' | 'video'; icon: typeof Camera; label: string }[] = [
     { type: 'photo', icon: Camera, label: t('photo') },
     { type: 'video', icon: Film, label: t('video') },
-    { type: 'message', icon: MessageSquare, label: t('message') },
   ];
 
   if (isPaused) {
@@ -542,7 +531,7 @@ export default function UploadScreen() {
           </div>
 
           {/* Source Selector (Library vs. Live Camera) */}
-          {uploadType !== 'message' && !(uploadType === 'video' && videoLimitReached) && !(uploadType === 'photo' && photoLimitReached) && !preview && (
+          {!(uploadType === 'video' && videoLimitReached) && !(uploadType === 'photo' && photoLimitReached) && !preview && (
             <div className="px-5 mb-3 animate-fade-in">
               <div className="flex bg-blush/40 p-1 rounded-full border border-accent-border/30">
                 <button
@@ -575,20 +564,7 @@ export default function UploadScreen() {
 
           {/* Upload Zone */}
           <div className="px-5 flex-1">
-            {uploadType === 'message' ? (
-              <div className="relative">
-                <textarea
-                  value={messageText}
-                  onChange={(e) => handleMessageChange(e.target.value)}
-                  placeholder={t('writeWishes')}
-                  rows={6}
-                  className="w-full bg-blush rounded-xl p-4 text-charcoal placeholder:text-muted-warm/60 focus:outline-none focus:ring-2 focus:ring-gold/30 resize-none text-sm leading-relaxed pb-10"
-                />
-                <div className="absolute bottom-3 right-3">
-                  <EmojiPicker onSelect={(emoji) => handleMessageChange(messageText + emoji)} />
-                </div>
-              </div>
-            ) : uploadType === 'video' && videoLimitReached ? (
+            {uploadType === 'video' && videoLimitReached ? (
               <div className="w-full rounded-xl border border-gold/40 bg-blush/20 p-6 flex flex-col items-center justify-center text-center gap-4 animate-fade-in" style={{ aspectRatio: '4/3' }}>
                 <div className="w-12 h-12 rounded-full bg-blush flex items-center justify-center text-gold">
                   <Film size={22} />
@@ -771,16 +747,14 @@ export default function UploadScreen() {
             </div>
 
             {/* Limit Tip Note */}
-            {uploadType !== 'message' && (
-              <div className="mt-3.5 px-3 py-2.5 flex items-start gap-2 text-[11px] text-muted-warm/75 leading-relaxed bg-blush/20 rounded-xl border border-accent-border/30">
-                <span className="font-semibold text-gold mt-0.5">💡</span>
-                <span>
-                  {language === 'tr'
-                    ? 'En güzel anlarınızı seçin! Canlı slayt gösterisinin sorunsuz çalışması için misafir başına yüklemeler 10 video ve 50 fotoğraf ile sınırlıdır.'
-                    : 'Share your best highlights! To keep the slideshow running smoothly for everyone, uploads are limited to 10 videos and 50 photos per guest.'}
-                </span>
-              </div>
-            )}
+            <div className="mt-3.5 px-3 py-2.5 flex items-start gap-2 text-[11px] text-muted-warm/75 leading-relaxed bg-blush/20 rounded-xl border border-accent-border/30">
+              <span className="font-semibold text-gold mt-0.5">💡</span>
+              <span>
+                {language === 'tr'
+                  ? `En güzel anlarınızı seçin! Canlı slayt gösterisinin sorunsuz çalışması için misafir başına yüklemeler ${maxVideos} video ve ${maxPhotos} fotoğraf ile sınırlıdır.`
+                  : `Share your best highlights! To keep the slideshow running smoothly for everyone, uploads are limited to ${maxVideos} videos and ${maxPhotos} photos per guest.`}
+              </span>
+            </div>
           </div>
 
           {/* Submit */}

@@ -18,9 +18,10 @@ const EMOJI_GROUPS: { label: string; emojis: string[] }[] = [
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
+  align?: 'left' | 'right';
 }
 
-export default function EmojiPicker({ onSelect }: EmojiPickerProps) {
+export default function EmojiPicker({ onSelect, align = 'right' }: EmojiPickerProps) {
   const [open, setOpen] = useState(false);
   const [activeGroup, setActiveGroup] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
@@ -47,7 +48,7 @@ export default function EmojiPicker({ onSelect }: EmojiPickerProps) {
       </button>
 
       {open && (
-        <div className="absolute bottom-10 right-0 z-50 bg-white rounded-2xl shadow-elevated border border-accent-border/30 p-3 w-64 animate-fade-in">
+        <div className={`absolute bottom-10 ${align === 'left' ? 'left-0' : 'right-0'} z-50 bg-white rounded-2xl shadow-elevated border border-accent-border/30 p-3 w-64 animate-fade-in`}>
           {/* Group tabs */}
           <div className="flex gap-1 mb-2 border-b border-accent-border/20 pb-2">
             {EMOJI_GROUPS.map((g, i) => (

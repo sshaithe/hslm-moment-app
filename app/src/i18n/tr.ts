@@ -199,4 +199,14 @@ export const tr = {
   // Settings — Upload Placeholder
   uploadPlaceholderLabel: '⏳ Yükleme Bekleme Görseli',
   uploadPlaceholderDesc: 'Video yüklenirken gösterilecek yer tutucu görsel',
+
+  // Brush styles and Message limits
+  brushStrict: 'Düz',
+  brushCuted: 'Kesikli',
+  brushPoint: 'Noktalı',
+  messagesLimitReached: 'Maksimum {{limit}} mesaj sınırına ulaştınız.',
+  maxMessagesLimitLabel: 'Maks Mesaj Sınırı',
+  guestBookExplainer: 'Dijital anı defterimize en içten dileklerinizi yazın, bir çizim yapın, imzanızı bırakın veya bir fotoğraf yükleyin. Çiftimiz bu anıları ömür boyu saklayacaktır!',
+  guestBookLimitReached: 'Maksimum {{limit}} misafir defteri mesajı sınırına ulaştınız.',
+  maxGuestBookLimitLabel: 'Maks Defter Mesajı Sınırı',
 } as const;

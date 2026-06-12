@@ -13,7 +13,7 @@ const WEDDING_PUBLIC_COLS = `
   approve_before_display, slideshow_approval_mode, uploads_paused,
   hero_photo, couple_photo, gallery_banner, thank_you_quote,
   upload_placeholder_image, allow_guest_change_name, max_photos_per_guest,
-  max_videos_per_guest
+  max_videos_per_guest, max_messages_per_guest, max_guestbook_signatures_per_guest
 `.trim();
 
 interface WeddingRow {
