@@ -9,7 +9,7 @@ const router = Router();
  * Expose media securely by proxying it directly from Backblaze B2.
  * This bypasses ISP-level blocks on B2 domains (e.g. in Turkey) and solves all CORS issues.
  */
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+router.get('/', (req: Request, res: Response): void => {
   const file = req.query.file as string | undefined;
 
   if (!file) {
@@ -26,49 +26,12 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  // Build the direct B2 URL
+  // Build the direct CDN URL
   const decodedFile = decodeURIComponent(file);
   const cdnUrl = `${publicBase}/${decodedFile}`;
 
-  try {
-    // Fetch directly from B2 from the local PC
-    const response = await fetch(cdnUrl);
-
-    if (!response.ok) {
-      console.warn(`[Media Proxy] Fetch failed for ${cdnUrl} with status ${response.status}. Falling back to 302 redirect.`);
-      res.redirect(302, cdnUrl);
-      return;
-    }
-
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-
-    // Copy Content-Type and Content-Length if available
-    const contentType = response.headers.get('content-type');
-    if (contentType) {
-      res.setHeader('Content-Type', contentType);
-    }
-    const contentLength = response.headers.get('content-length');
-    if (contentLength) {
-      res.setHeader('Content-Length', contentLength);
-    }
-
-    if (response.body) {
-      const stream = Readable.fromWeb(response.body as any);
-      stream.on('error', (err: any) => {
-        console.error(`[Media Proxy] Stream error for ${cdnUrl}:`, err.message);
-      });
-      stream.pipe(res);
-    } else {
-      console.warn(`[Media Proxy] Empty response body for ${cdnUrl}. Falling back to 302 redirect.`);
-      res.redirect(302, cdnUrl);
-    }
-  } catch (err: any) {
-    console.error(`[Media Proxy] Error proxying ${cdnUrl}:`, err.message);
-    // Fall back to 302 redirect
-    res.redirect(302, cdnUrl);
-  }
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.redirect(302, cdnUrl);
 });
 
 export default router;
