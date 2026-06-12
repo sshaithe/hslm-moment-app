@@ -62,6 +62,11 @@ export default function MessageWallScreen() {
   const handleSubmit = async () => {
     if (!messageText.trim()) return;
 
+    if (!guest && wedding.require_guest_name) {
+      navigate('/join?redirect=/message-wall');
+      return;
+    }
+
     const guestName = guest ? `${guest.first_name} ${guest.last_name}` : 'Anonymous';
     const guestId = guest?.guest_id || 'anonymous';
 
@@ -114,7 +119,13 @@ export default function MessageWallScreen() {
       {/* Action Buttons */}
       <div className="flex gap-3 px-5 mb-6">
         <button
-          onClick={() => setShowComposer(!showComposer)}
+          onClick={() => {
+            if (!guest && wedding.require_guest_name) {
+              navigate('/join?redirect=/message-wall');
+            } else {
+              setShowComposer(!showComposer);
+            }
+          }}
           className="flex-1 py-3 rounded-full gradient-gold text-white text-sm font-medium flex items-center justify-center gap-2 shadow-elevated"
         >
           <PenLine size={16} />
