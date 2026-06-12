@@ -102,6 +102,7 @@ function updateCorsRules(auth, { bucket, apiUrl }) {
     const body = JSON.stringify({
       accountId: auth.accountId,
       bucketId: bucket.bucketId,
+      bucketType: 'allPublic',
       corsRules: corsRules
     });
 
