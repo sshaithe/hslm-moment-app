@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trash2, RefreshCw, Book, PenLine, Camera, X, Send, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Trash2, RefreshCw, Book, PenLine, Camera, X, Send, CheckCircle, Layout, Sparkles } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -19,6 +19,16 @@ const PALETTE = [
 ];
 
 const LINE_SIZES = [2, 4, 7, 12];
+
+interface PlacedSticker {
+  id: string;
+  type: 'emoji' | 'text';
+  value: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+}
 
 // ─── Signature Canvas Component ──────────────────────────────────────────────
 function SignatureCanvas({
@@ -41,6 +51,21 @@ function SignatureCanvas({
   const [lineSize, setLineSize] = useState(4);
   const [isEraser, setIsEraser] = useState(false);
 
+  // Enhanced state
+  const [bgTemplate, setBgTemplate] = useState<'cream' | 'gold' | 'blush' | 'sage' | 'lines'>('cream');
+  const [isCalligraphy, setIsCalligraphy] = useState(true);
+  const [placedStickers, setPlacedStickers] = useState<PlacedSticker[]>([]);
+  const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
+  const [activeCanvasTab, setActiveCanvasTab] = useState<'draw' | 'template' | 'stickers'>('draw');
+
+  const { t } = useLanguage();
+
+  // Stable callback ref to prevent infinite rendering loops
+  const onDrawnRef = useRef(onDrawn);
+  useEffect(() => {
+    onDrawnRef.current = onDrawn;
+  }, [onDrawn]);
+
   // Setup canvas DPI scaling
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -51,8 +76,7 @@ function SignatureCanvas({
     canvas.height = rect.height * dpr;
     const ctx = canvas.getContext('2d')!;
     ctx.scale(dpr, dpr);
-    ctx.fillStyle = '#fffdf9';
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, rect.width, rect.height);
   }, []);
 
   const getPos = (e: React.TouchEvent | React.MouseEvent, canvas: HTMLCanvasElement) => {
@@ -70,6 +94,7 @@ function SignatureCanvas({
     isDrawing.current = true;
     lastPoint.current = getPos(e, canvas);
     setIsEmpty(false);
+    setSelectedStickerId(null); // deselect stickers on draw
     if ('touches' in e) e.preventDefault();
   };
 
@@ -89,11 +114,22 @@ function SignatureCanvas({
     const midY = (last.y + current.y) / 2;
     ctx.quadraticCurveTo(last.x, last.y, midX, midY);
 
-    ctx.strokeStyle = isEraser ? '#fffdf9' : color;
-    ctx.lineWidth = isEraser ? lineSize * 4 : lineSize;
+    if (isCalligraphy && !isEraser) {
+      const dx = current.x - last.x;
+      const dy = current.y - last.y;
+      const dist = Math.hypot(dx, dy);
+      // Faster movement produces elegant thinner calligraphy strokes
+      const targetWidth = Math.max(1, lineSize * (1.2 - Math.min(dist / 8, 0.8)));
+      ctx.lineWidth = targetWidth;
+    } else {
+      ctx.lineWidth = isEraser ? lineSize * 4 : lineSize;
+    }
+
+    ctx.strokeStyle = color;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.globalAlpha = isEraser ? 1 : 0.92;
+    ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
     ctx.stroke();
 
     lastPoint.current = current;
@@ -104,10 +140,7 @@ function SignatureCanvas({
     if (!isDrawing.current) return;
     isDrawing.current = false;
     lastPoint.current = null;
-    const canvas = canvasRef.current;
-    if (canvas) {
-      onDrawn(canvas.toDataURL('image/png'));
-    }
+    compileCanvas();
   };
 
   const clearCanvas = () => {
@@ -115,75 +148,447 @@ function SignatureCanvas({
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
     const rect = canvas.getBoundingClientRect();
-    ctx.fillStyle = '#fffdf9';
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, rect.width, rect.height);
     setIsEmpty(true);
-    onDrawn('');
+    setPlacedStickers([]);
+    setSelectedStickerId(null);
   };
 
+  // Compile separate layers into a single image to pass to onDrawn
+  const compileCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    const compileCanvas = document.createElement('canvas');
+    compileCanvas.width = canvas.width;
+    compileCanvas.height = canvas.height;
+    const ctx = compileCanvas.getContext('2d')!;
+
+    const dpr = window.devicePixelRatio || 1;
+    ctx.scale(dpr, dpr);
+
+    const w = rect.width;
+    const h = rect.height;
+
+    // 1. Draw Background Template
+    if (bgTemplate === 'cream') {
+      ctx.fillStyle = '#fffdf9';
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgTemplate === 'gold') {
+      ctx.fillStyle = '#fffdf9';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = '#c9a84c';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(6, 6, w - 12, h - 12);
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(9, 9, w - 18, h - 18);
+    } else if (bgTemplate === 'blush') {
+      ctx.fillStyle = '#fffdf9';
+      ctx.fillRect(0, 0, w, h);
+      let grad = ctx.createRadialGradient(0, 0, 5, 0, 0, w * 0.7);
+      grad.addColorStop(0, 'rgba(224, 123, 138, 0.2)');
+      grad.addColorStop(1, 'rgba(224, 123, 138, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      grad = ctx.createRadialGradient(w, h, 5, w, h, w * 0.7);
+      grad.addColorStop(0, 'rgba(224, 123, 138, 0.2)');
+      grad.addColorStop(1, 'rgba(224, 123, 138, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgTemplate === 'sage') {
+      ctx.fillStyle = '#fffdf9';
+      ctx.fillRect(0, 0, w, h);
+      let grad = ctx.createRadialGradient(w, 0, 5, w, 0, w * 0.7);
+      grad.addColorStop(0, 'rgba(122, 158, 126, 0.25)');
+      grad.addColorStop(1, 'rgba(122, 158, 126, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      grad = ctx.createRadialGradient(0, h, 5, 0, h, w * 0.7);
+      grad.addColorStop(0, 'rgba(122, 158, 126, 0.25)');
+      grad.addColorStop(1, 'rgba(122, 158, 126, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgTemplate === 'lines') {
+      ctx.fillStyle = '#fffdf9';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(201, 168, 76, 0.15)';
+      ctx.lineWidth = 1;
+      const spacing = h / 6;
+      for (let i = 1; i < 6; i++) {
+        ctx.beginPath();
+        ctx.moveTo(15, i * spacing);
+        ctx.lineTo(w - 15, i * spacing);
+        ctx.stroke();
+      }
+    }
+
+    // 2. Draw brush strokes (the drawings)
+    ctx.drawImage(canvas, 0, 0, w, h);
+
+    // 3. Draw Stickers
+    placedStickers.forEach((st) => {
+      ctx.save();
+      ctx.translate(st.x, st.y);
+      ctx.rotate((st.rotation * Math.PI) / 180);
+      ctx.scale(st.scale, st.scale);
+
+      if (st.type === 'text') {
+        ctx.font = 'italic 15px "Playfair Display", Georgia, serif';
+        ctx.fillStyle = '#B8975A';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(st.value, 0, 0);
+      } else {
+        ctx.font = '28px "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(st.value, 0, 0);
+      }
+      ctx.restore();
+    });
+
+    onDrawnRef.current(compileCanvas.toDataURL('image/png'));
+  };
+
+  // Compile automatically when stickers or background templates change
+  useEffect(() => {
+    compileCanvas();
+  }, [placedStickers, bgTemplate]);
+
+  // Sticker drag/transform setup
+  const activeDragRef = useRef<{
+    stickerId: string;
+    startX: number;
+    startY: number;
+    initialX: number;
+    initialY: number;
+    mode: 'drag' | 'transform';
+    initialScale: number;
+    initialRotation: number;
+    centerX: number;
+    centerY: number;
+    initialAngle: number;
+    initialDist: number;
+  } | null>(null);
+
+  const addSticker = (type: 'emoji' | 'text', value: string) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const w = rect?.width || 300;
+    const h = rect?.height || 200;
+    const newSticker: PlacedSticker = {
+      id: uuidv4(),
+      type,
+      value,
+      x: w / 2,
+      y: h / 2,
+      scale: 1.0,
+      rotation: 0,
+    };
+    setPlacedStickers((prev) => [...prev, newSticker]);
+    setSelectedStickerId(newSticker.id);
+  };
+
+  const deleteSticker = (id: string) => {
+    setPlacedStickers((prev) => prev.filter((s) => s.id !== id));
+    setSelectedStickerId(null);
+  };
+
+  const startStickerDrag = (e: React.MouseEvent | React.TouchEvent, id: string) => {
+    e.stopPropagation();
+    const st = placedStickers.find((s) => s.id === id);
+    if (!st) return;
+
+    setSelectedStickerId(id);
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    activeDragRef.current = {
+      stickerId: id,
+      startX: clientX,
+      startY: clientY,
+      initialX: st.x,
+      initialY: st.y,
+      mode: 'drag',
+      initialScale: st.scale,
+      initialRotation: st.rotation,
+      centerX: 0,
+      centerY: 0,
+      initialAngle: 0,
+      initialDist: 0,
+    };
+  };
+
+  const startStickerTransform = (e: React.MouseEvent | React.TouchEvent, id: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const st = placedStickers.find((s) => s.id === id);
+    if (!st) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const canvasRect = canvas.getBoundingClientRect();
+
+    const centerClientX = canvasRect.left + st.x;
+    const centerClientY = canvasRect.top + st.y;
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    const dx = clientX - centerClientX;
+    const dy = clientY - centerClientY;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+
+    activeDragRef.current = {
+      stickerId: id,
+      startX: clientX,
+      startY: clientY,
+      initialX: st.x,
+      initialY: st.y,
+      mode: 'transform',
+      initialScale: st.scale,
+      initialRotation: st.rotation,
+      centerX: centerClientX,
+      centerY: centerClientY,
+      initialAngle: angle,
+      initialDist: dist || 1,
+    };
+  };
+
+  useEffect(() => {
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      const active = activeDragRef.current;
+      if (!active) return;
+
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+      setPlacedStickers((prev) =>
+        prev.map((st) => {
+          if (st.id !== active.stickerId) return st;
+
+          if (active.mode === 'drag') {
+            const dx = clientX - active.startX;
+            const dy = clientY - active.startY;
+            return {
+              ...st,
+              x: active.initialX + dx,
+              y: active.initialY + dy,
+            };
+          } else if (active.mode === 'transform') {
+            const dx = clientX - active.centerX;
+            const dy = clientY - active.centerY;
+            const dist = Math.hypot(dx, dy);
+            const angle = Math.atan2(dy, dx);
+
+            const scaleChange = dist / active.initialDist;
+            const rotationChange = ((angle - active.initialAngle) * 180) / Math.PI;
+
+            return {
+              ...st,
+              scale: Math.max(0.4, Math.min(2.5, active.initialScale * scaleChange)),
+              rotation: (active.initialRotation + rotationChange) % 360,
+            };
+          }
+          return st;
+        })
+      );
+    };
+
+    const handleEnd = () => {
+      if (activeDragRef.current) {
+        activeDragRef.current = null;
+        compileCanvas();
+      }
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [placedStickers]);
+
   return (
-    <div className="space-y-3">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        {/* Palette */}
-        <div className="flex items-center gap-1.5">
-          {PALETTE.map((c) => (
-            <button
-              key={c.hex}
-              onClick={() => { setColor(c.hex); setIsEraser(false); }}
-              title={c.name}
-              style={{ background: c.hex }}
-              className={`w-7 h-7 rounded-full border-2 transition-transform ${
-                color === c.hex && !isEraser ? 'border-charcoal scale-110 shadow-md' : 'border-white/60 hover:scale-105'
-              }`}
-            />
-          ))}
-        </div>
-
-        {/* Sizes */}
-        <div className="flex items-center gap-1.5">
-          {LINE_SIZES.map((s) => (
-            <button
-              key={s}
-              onClick={() => setLineSize(s)}
-              title={`${s}px`}
-              className={`rounded-full border-2 flex items-center justify-center transition-all ${
-                lineSize === s && !isEraser
-                  ? 'border-gold bg-gold/10'
-                  : 'border-accent-border/40 hover:border-gold/40'
-              }`}
-              style={{ width: 28, height: 28 }}
-            >
-              <div
-                className="rounded-full bg-charcoal"
-                style={{ width: Math.min(s * 2.5, 20), height: Math.min(s * 2.5, 20) }}
-              />
-            </button>
-          ))}
-        </div>
-
-        {/* Eraser + Clear */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setIsEraser(!isEraser)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-              isEraser ? 'bg-gold text-white border-gold' : 'border-accent-border/40 text-muted-warm hover:border-gold'
-            }`}
-          >
-            {eraserLabel}
-          </button>
-          <button
-            onClick={clearCanvas}
-            title="Clear canvas"
-            className="p-1.5 rounded-full text-muted-warm hover:text-red-500 hover:bg-red-50 transition-colors"
-          >
-            <Trash2 size={15} />
-          </button>
-        </div>
+    <div className="space-y-4">
+      {/* Mode Selectors */}
+      <div className="flex border-b border-accent-border/20 mb-1">
+        <button
+          onClick={() => setActiveCanvasTab('draw')}
+          className={`flex-1 pb-2 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 flex items-center justify-center gap-1.5 ${
+            activeCanvasTab === 'draw' ? 'border-gold text-gold' : 'border-transparent text-muted-warm/60'
+          }`}
+        >
+          <PenLine size={13} />
+          {t('draw' as any) || 'Brush'}
+        </button>
+        <button
+          onClick={() => setActiveCanvasTab('template')}
+          className={`flex-1 pb-2 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 flex items-center justify-center gap-1.5 ${
+            activeCanvasTab === 'template' ? 'border-gold text-gold' : 'border-transparent text-muted-warm/60'
+          }`}
+        >
+          <Layout size={13} />
+          {t('template' as any) || 'Template'}
+        </button>
+        <button
+          onClick={() => setActiveCanvasTab('stickers')}
+          className={`flex-1 pb-2 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 flex items-center justify-center gap-1.5 ${
+            activeCanvasTab === 'stickers' ? 'border-gold text-gold' : 'border-transparent text-muted-warm/60'
+          }`}
+        >
+          <Sparkles size={13} />
+          {t('stickers' as any) || 'Stickers'}
+        </button>
       </div>
 
-      {/* Canvas */}
-      <div className="relative rounded-2xl overflow-hidden border-2 border-dashed border-gold/40 bg-[#fffdf9] shadow-inner select-none">
+      {/* Editor controls container */}
+      <div className="min-h-[50px] flex items-center">
+        {/* Draw Tab */}
+        {activeCanvasTab === 'draw' && (
+          <div className="w-full flex items-center justify-between gap-2 flex-wrap animate-fade-in">
+            {/* Palette */}
+            <div className="flex items-center gap-1.5">
+              {PALETTE.map((c) => (
+                <button
+                  key={c.hex}
+                  onClick={() => { setColor(c.hex); setIsEraser(false); }}
+                  title={c.name}
+                  style={{ background: c.hex }}
+                  className={`w-7 h-7 rounded-full border-2 transition-transform ${
+                    color === c.hex && !isEraser ? 'border-charcoal scale-110 shadow-md' : 'border-white/60 hover:scale-105'
+                  }`}
+                />
+              ))}
+            </div>
+
+            {/* Sizes */}
+            <div className="flex items-center gap-1.5">
+              {LINE_SIZES.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setLineSize(s)}
+                  title={`${s}px`}
+                  className={`rounded-full border-2 flex items-center justify-center transition-all ${
+                    lineSize === s && !isEraser
+                      ? 'border-gold bg-gold/10'
+                      : 'border-accent-border/40 hover:border-gold/40'
+                  }`}
+                  style={{ width: 28, height: 28 }}
+                >
+                  <div
+                    className="rounded-full bg-charcoal"
+                    style={{ width: Math.min(s * 2.5, 20), height: Math.min(s * 2.5, 20) }}
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Calligraphy Toggle & Eraser + Clear */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => { setIsCalligraphy(!isCalligraphy); setIsEraser(false); }}
+                className={`px-3 py-1 rounded-full text-[10px] font-semibold border uppercase tracking-wider transition-colors ${
+                  isCalligraphy && !isEraser ? 'bg-gold/20 text-gold border-gold' : 'border-accent-border/40 text-muted-warm hover:border-gold'
+                }`}
+                title="Calligraphy stroke width variation"
+              >
+                ✒️ Calligraphy
+              </button>
+              <button
+                onClick={() => setIsEraser(!isEraser)}
+                className={`px-3 py-1 rounded-full text-[10px] font-semibold border uppercase tracking-wider transition-colors ${
+                  isEraser ? 'bg-gold text-white border-gold' : 'border-accent-border/40 text-muted-warm hover:border-gold'
+                }`}
+              >
+                {eraserLabel}
+              </button>
+              <button
+                onClick={clearCanvas}
+                title="Clear canvas"
+                className="p-1.5 rounded-full text-muted-warm hover:text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Template Tab */}
+        {activeCanvasTab === 'template' && (
+          <div className="w-full flex items-center gap-2 overflow-x-auto py-1 no-scrollbar animate-fade-in">
+            {[
+              { id: 'cream', name: 'Cream', style: 'bg-[#fffdf9]' },
+              { id: 'gold', name: 'Gold Border', style: 'bg-[#fffdf9] border-2 border-gold/60' },
+              { id: 'blush', name: 'Blush Watercolor', style: 'bg-gradient-to-br from-rose-100/40 via-[#fffdf9] to-rose-100/40' },
+              { id: 'sage', name: 'Sage Watercolor', style: 'bg-gradient-to-tr from-green-100/30 via-[#fffdf9] to-green-100/30' },
+              { id: 'lines', name: 'Notebook Lines', style: 'bg-[#fffdf9] [background-image:linear-gradient(rgba(201,168,76,0.15)_1px,transparent_1px)] [background-size:100%_16px]' }
+            ].map((tmpl) => (
+              <button
+                key={tmpl.id}
+                onClick={() => setBgTemplate(tmpl.id as any)}
+                className={`px-4 py-2 rounded-xl text-xs font-medium border flex items-center gap-2 flex-shrink-0 transition-all ${
+                  bgTemplate === tmpl.id ? 'border-gold ring-1 ring-gold bg-gold/5 font-semibold' : 'border-accent-border/40 hover:border-gold/50 bg-white'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-sm border border-accent-border/10 shadow-sm ${tmpl.style}`} />
+                {tmpl.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Stickers Tab */}
+        {activeCanvasTab === 'stickers' && (
+          <div className="w-full flex flex-col gap-2 animate-fade-in">
+            <div className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar">
+              <span className="text-[10px] uppercase font-bold text-muted-warm/60 mr-1 flex-shrink-0">Stamps:</span>
+              {['❤️', '💖', '💍', '🥂', '🎂', '🌸', '🕊️', '✨', '🎈', '💌', '🌹', '🎉'].map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => addSticker('emoji', emoji)}
+                  className="w-8 h-8 rounded-lg bg-blush/30 hover:bg-blush/60 flex items-center justify-center text-xl transition-all hover:scale-110 active:scale-95"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar">
+              <span className="text-[10px] uppercase font-bold text-muted-warm/60 mr-1 flex-shrink-0">Cursive:</span>
+              {['Congratulations', 'With Love', 'Best Wishes', 'Just Married', 'Forever & Always', 'Cheers!'].map((txt) => (
+                <button
+                  key={txt}
+                  onClick={() => addSticker('text', txt)}
+                  className="px-3 py-1.5 rounded-lg bg-gold/10 hover:bg-gold/20 text-[11px] font-heading italic text-gold font-semibold border border-gold/20 transition-all hover:scale-[1.03] active:scale-95 whitespace-nowrap"
+                >
+                  {txt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Layered Canvas Container */}
+      <div
+        onClick={() => setSelectedStickerId(null)}
+        className={`relative rounded-2xl overflow-hidden border-2 border-dashed border-gold/40 shadow-inner select-none transition-all duration-300 ${
+          bgTemplate === 'cream' ? 'bg-[#fffdf9]' :
+          bgTemplate === 'gold' ? 'bg-[#fffdf9] border-double border-[6px] border-gold/50' :
+          bgTemplate === 'blush' ? 'bg-gradient-to-br from-rose-100/30 via-[#fffdf9] to-rose-100/30' :
+          bgTemplate === 'sage' ? 'bg-gradient-to-tr from-green-100/20 via-[#fffdf9] to-green-100/20' :
+          'bg-[#fffdf9] [background-image:linear-gradient(rgba(201,168,76,0.08)_1px,transparent_1px)] [background-size:100%_33px]'
+        }`}
+        style={{ height: 220 }}
+      >
+        {/* Draw lines on transparent canvas */}
         <canvas
           ref={canvasRef}
           onMouseDown={startDraw}
@@ -193,11 +598,72 @@ function SignatureCanvas({
           onTouchStart={startDraw}
           onTouchMove={draw}
           onTouchEnd={endDraw}
-          className="w-full touch-none"
-          style={{ height: 200, cursor: isEraser ? 'cell' : 'crosshair', display: 'block' }}
+          className="absolute inset-0 w-full h-full touch-none z-10"
+          style={{ cursor: isEraser ? 'cell' : 'crosshair', display: 'block', background: 'transparent' }}
         />
-        {isEmpty && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+
+        {/* Sticker Layer */}
+        <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden">
+          {placedStickers.map((st) => {
+            const isSelected = selectedStickerId === st.id;
+            return (
+              <div
+                key={st.id}
+                style={{
+                  position: 'absolute',
+                  left: st.x,
+                  top: st.y,
+                  transform: `translate(-50%, -50%) scale(${st.scale}) rotate(${st.rotation}deg)`,
+                  cursor: 'move',
+                  touchAction: 'none',
+                }}
+                className={`absolute p-2 select-none group pointer-events-auto flex items-center justify-center ${
+                  isSelected ? 'border border-dashed border-gold/70 bg-white/20 backdrop-blur-[1px] rounded shadow-sm' : 'border border-transparent'
+                }`}
+                onMouseDown={(e) => startStickerDrag(e, st.id)}
+                onTouchStart={(e) => startStickerDrag(e, st.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedStickerId(st.id);
+                }}
+              >
+                {st.type === 'text' ? (
+                  <span className="font-heading italic text-gold font-semibold text-sm whitespace-nowrap leading-none select-none">{st.value}</span>
+                ) : (
+                  <span className="text-2xl select-none leading-none select-none">{st.value}</span>
+                )}
+
+                {/* Delete Button */}
+                {isSelected && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteSticker(st.id);
+                    }}
+                    className="absolute -top-3.5 -right-3.5 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md border border-white hover:bg-red-600 transition-colors pointer-events-auto"
+                  >
+                    <X size={10} />
+                  </button>
+                )}
+
+                {/* Scale & Rotate Handle */}
+                {isSelected && (
+                  <div
+                    onMouseDown={(e) => startStickerTransform(e, st.id)}
+                    onTouchStart={(e) => startStickerTransform(e, st.id)}
+                    className="absolute -bottom-3.5 -right-3.5 w-6 h-6 rounded-full bg-gold text-white flex items-center justify-center shadow-md border border-white cursor-se-resize hover:bg-gold/80 transition-colors pointer-events-auto"
+                  >
+                    <RefreshCw size={9} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Empty State Hint */}
+        {isEmpty && placedStickers.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0">
             <PenLine size={28} className="text-gold/25 mb-1" />
             <p className="text-xs text-muted-warm/40 font-medium">{drawHint}</p>
           </div>

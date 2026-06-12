@@ -53,7 +53,7 @@ export default function GalleryScreen() {
   const filteredUploads = useMemo(() => {
     // Exclude uploads with stale blob: URLs that expired after page refresh
     let result = uploads
-      .filter((u) => !u.is_hidden)
+      .filter((u) => !u.is_hidden && u.type !== 'guestbook')
       .filter((u) => {
         const url = u.local_url || u.public_url;
         // Skip media uploads (photo/video) that have no viewable URL at all

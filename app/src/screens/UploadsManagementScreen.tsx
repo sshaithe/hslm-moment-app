@@ -8,7 +8,7 @@ import { getMediaUrl } from '@/lib/mediaHelper';
 import VideoThumbnail from '@/components/shared/VideoThumbnail';
 
 type StatusFilter = 'all' | 'visible' | 'hidden' | 'pending' | 'reported' | 'featured';
-type TypeFilter = 'all' | 'photo' | 'video' | 'message';
+type TypeFilter = 'all' | 'photo' | 'video' | 'message' | 'guestbook';
 
 export default function UploadsManagementScreen() {
   const { t, language } = useLanguage();
@@ -159,7 +159,7 @@ export default function UploadsManagementScreen() {
             <Filter size={12} />
             <span>{t('filterByType')}:</span>
           </div>
-          {(['all', 'photo', 'video', 'message'] as TypeFilter[]).map((tf) => (
+          {(['all', 'photo', 'video', 'message', 'guestbook'] as TypeFilter[]).map((tf) => (
             <button
               key={tf}
               onClick={() => setTypeFilterAndReset(tf)}
@@ -167,7 +167,7 @@ export default function UploadsManagementScreen() {
                 typeFilter === tf ? 'bg-charcoal text-ivory' : 'bg-blush/50 text-muted-warm hover:bg-blush'
               }`}
             >
-              {tf === 'all' ? t('all') : tf === 'photo' ? t('photos') : tf === 'video' ? t('videosTab') : t('messagesTab')}
+              {tf === 'all' ? t('all') : tf === 'photo' ? t('photos') : tf === 'video' ? t('videosTab') : tf === 'message' ? t('messagesTab') : t('guestBook')}
             </button>
           ))}
         </div>
@@ -269,6 +269,16 @@ export default function UploadsManagementScreen() {
                         );
                       })() : upload.type === 'photo' ? (
                         <img src={getMediaUrl(upload.local_url || upload.public_url) || undefined} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      ) : upload.type === 'guestbook' ? (
+                        upload.drawing_data_url ? (
+                          <img src={upload.drawing_data_url} alt="" className="w-full h-full object-contain bg-[#fffdf9]" loading="lazy" />
+                        ) : upload.local_url || upload.public_url ? (
+                          <img src={getMediaUrl(upload.local_url || upload.public_url) || undefined} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <MessageSquare size={14} className="text-gold" />
+                          </div>
+                        )
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <MessageSquare size={14} className="text-gold" />
