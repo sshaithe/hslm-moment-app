@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { X, Download, Flag, Send, RefreshCw } from 'lucide-react';
+import { X, Download, Flag, Send, RefreshCw, Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import ReactionBar from '@/components/shared/ReactionBar';
@@ -19,6 +19,88 @@ export default function PhotoDetailScreen() {
   const [showReportConfirm, setShowReportConfirm] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+
+  // Custom Video Player States
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-hide controls when video is playing
+  useEffect(() => {
+    if (isPlaying) {
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 2500);
+    } else {
+      setShowControls(true);
+    }
+    return () => {
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    };
+  }, [isPlaying, currentTime]);
+
+  const handlePlayPause = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play().catch(console.error);
+      setIsPlaying(true);
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    setCurrentTime(video.currentTime);
+  };
+
+  const handleLoadedMetadata = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    setDuration(video.duration);
+  };
+
+  const handleToggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = !video.muted;
+    setIsMuted(video.muted);
+  };
+
+  const handleFullscreen = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.requestFullscreen) {
+      video.requestFullscreen();
+    } else if ((video as any).webkitRequestFullscreen) {
+      (video as any).webkitRequestFullscreen();
+    }
+  };
+
+  const formatVideoTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const video = videoRef.current;
+    if (!video || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    video.currentTime = pos * duration;
+    setCurrentTime(pos * duration);
+  };
 
   // Load comment draft from localStorage
   useEffect(() => {
@@ -215,14 +297,103 @@ export default function PhotoDetailScreen() {
       {/* Image/Video */}
       <div className="relative bg-charcoal">
         {upload.type === 'video' ? (
-          <video
-            src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
-            className="w-full max-h-[60vh] object-contain"
-            controls
-            preload="none"
-            playsInline
-            poster={upload.thumbnail_url ? getMediaUrl(upload.thumbnail_url) : undefined}
-          />
+          <div 
+            className="relative w-full max-h-[60vh] aspect-video bg-black flex items-center justify-center group overflow-hidden"
+            onMouseMove={() => {
+              setShowControls(true);
+              if (isPlaying) {
+                if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+                controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 2500);
+              }
+            }}
+            onMouseLeave={() => isPlaying && setShowControls(false)}
+          >
+            <video
+              ref={videoRef}
+              src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
+              className="w-full h-full object-contain cursor-pointer"
+              preload="none"
+              playsInline
+              poster={upload.thumbnail_url ? getMediaUrl(upload.thumbnail_url) : undefined}
+              onClick={handlePlayPause}
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onEnded={() => {
+                setIsPlaying(false);
+                setShowControls(true);
+              }}
+            />
+
+            {/* Big Center Play Button Overlay */}
+            {(!isPlaying || showControls) && (
+              <div 
+                className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none transition-opacity duration-300"
+                style={{ opacity: !isPlaying || showControls ? 1 : 0 }}
+              >
+                <button
+                  onClick={handlePlayPause}
+                  className="w-16 h-16 rounded-full bg-white/95 backdrop-blur-sm shadow-premium flex items-center justify-center hover:scale-105 active:scale-95 transition-all pointer-events-auto"
+                >
+                  {isPlaying ? (
+                    <Pause size={24} style={{ color: '#b89047', fill: '#b89047' }} />
+                  ) : (
+                    <Play size={24} style={{ color: '#b89047', fill: '#b89047' }} className="ml-1" />
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Custom Control Bar */}
+            <div 
+              className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col gap-2 transition-all duration-300 z-20"
+              style={{
+                transform: showControls ? 'translateY(0)' : 'translateY(100%)',
+                opacity: showControls ? 1 : 0,
+                pointerEvents: showControls ? 'auto' : 'none'
+              }}
+            >
+              {/* Progress Slider */}
+              <div 
+                className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer relative flex items-center group/track"
+                onClick={handleProgressClick}
+              >
+                <div 
+                  className="h-full rounded-full relative" 
+                  style={{ width: `${progressPercent}%`, backgroundColor: '#b89047' }}
+                >
+                  <div className="absolute right-0 w-3 h-3 rounded-full bg-white shadow-premium scale-0 group-hover/track:scale-100 transition-transform -mr-1.5" />
+                </div>
+              </div>
+
+              {/* Bottom Row Controls */}
+              <div className="flex items-center justify-between text-white text-xs mt-1">
+                <div className="flex items-center gap-3">
+                  <button onClick={handlePlayPause} className="hover:text-gold active:scale-90 transition-all">
+                    {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                  </button>
+                  <span className="font-mono text-white/90">
+                    {formatVideoTime(currentTime)} / {formatVideoTime(duration || 0)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3.5">
+                  <button onClick={handleToggleMute} className="hover:text-gold active:scale-90 transition-all">
+                    {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                  </button>
+                  <button onClick={handleFullscreen} className="hover:text-gold active:scale-90 transition-all">
+                    <Maximize size={16} />
+                  </button>
+                  {wedding.allow_downloads && (
+                    <button onClick={handleDownload} className="hover:text-gold active:scale-90 transition-all" title="Download">
+                      <Download size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         ) : upload.type === 'photo' ? (
           <img
             src={getMediaUrl(upload.local_url || upload.public_url) || undefined}
