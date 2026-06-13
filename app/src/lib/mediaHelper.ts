@@ -11,6 +11,19 @@ export function getMediaUrl(url: string | null | undefined): string {
     return url;
   }
 
-  // All remote URLs (Backblaze, CDN, etc.) are returned directly.
+  // Rewrite blocked Backblaze URLs to use the CDN URL (solving Turkish ISP blocks and CORS issues)
+  const cdnBase = import.meta.env.VITE_S3_PUBLIC_URL;
+  if (cdnBase && url.includes('backblazeb2.com')) {
+    // Extract everything after the file bucket portion
+    // Example: https://f003.backblazeb2.com/file/hslm-wedding-gallery/uploads/abc.jpg
+    // matches: /file/[bucket-name]/[rest-of-url]
+    const match = url.match(/\/file\/[^/]+\/(.+)$/);
+    if (match && match[1]) {
+      const cleanCdnBase = cdnBase.replace(/\/$/, '');
+      return `${cleanCdnBase}/${match[1]}`;
+    }
+  }
+
+  // All remote URLs are returned directly.
   return url;
 }
