@@ -334,7 +334,10 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       });
 
       // 3. Return direct Backblaze/CDN public URL (no proxy)
-      const publicUrlBase = (import.meta.env.VITE_S3_PUBLIC_URL || '').replace(/\/$/, '');
+      let publicUrlBase = (import.meta.env.VITE_S3_PUBLIC_URL || '').replace(/\/$/, '');
+      if (publicUrlBase.includes('backblazeb2.com') || !publicUrlBase) {
+        publicUrlBase = 'https://cdn.acelyamuhammet.xyz/file/hslm-wedding-gallery';
+      }
       return `${publicUrlBase}/${fileName}`;
     }
 
