@@ -792,11 +792,26 @@ export default function UploadScreen() {
                           </p>
                           <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15 select-none pointer-events-none">
                             {language === 'tr'
-                              ? 'Maks Fotoğraf Sınırı: 20MB'
-                              : 'Max Photo Limit: 20MB'}
+                              ? 'Maks Fotoğraf Sınırı: 50MB'
+                              : 'Max Photo Limit: 50MB'}
                           </p>
                         </>
                       )}
+
+                      {/* Native button to guarantee native user gesture click activation on iOS & Android */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerFileSelect();
+                        }}
+                        className="mt-3 px-5 py-2.5 rounded-full gradient-gold text-white text-xs font-semibold shadow-elevated hover:opacity-90 active:scale-95 transition-all pointer-events-auto cursor-pointer"
+                      >
+                        {uploadType === 'photo'
+                          ? (language === 'tr' ? 'Fotoğraf Seç' : 'Choose Photo')
+                          : (language === 'tr' ? 'Video Seç' : 'Choose Video')
+                        }
+                      </button>
                     </div>
                   )}
                 </div>
