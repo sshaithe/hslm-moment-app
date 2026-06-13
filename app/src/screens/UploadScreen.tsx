@@ -269,13 +269,13 @@ export default function UploadScreen() {
         return;
       }
 
-      // 3. Video Duration Validation (under 3 minutes / 180s)
+      // 3. Video Duration Validation (under 2 minutes / 120s)
       const duration = await checkVideoDuration(f);
-      if (duration > 180) {
+      if (duration > 120) {
         addToast(
           language === 'tr'
-            ? 'Lütfen 3 dakikadan kısa bir video seçin.'
-            : 'Please choose a video shorter than 3 minutes.',
+            ? 'Lütfen 2 dakikadan kısa bir video seçin.'
+            : 'Please choose a video shorter than 2 minutes.',
           'error'
         );
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -726,8 +726,8 @@ export default function UploadScreen() {
                         </p>
                         <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
                           {language === 'tr'
-                            ? 'Maks Video Sınırı: 150MB & 3 Dakika'
-                            : 'Max Video Limit: 150MB & 3 Mins'}
+                            ? 'Maks Video Sınırı: 150MB & 2 Dakika'
+                            : 'Max Video Limit: 150MB & 2 Mins'}
                         </p>
                       </>
                     )}
