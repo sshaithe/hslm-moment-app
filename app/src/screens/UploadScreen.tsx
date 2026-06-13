@@ -654,154 +654,157 @@ export default function UploadScreen() {
                 </div>
               </div>
             ) : (
-              <>
-                {/* Hidden file input — connected via htmlFor on labels below. NO programmatic .click() */}
-                <input
-                  id="file-upload-input"
-                  ref={fileInputRef}
-                  type="file"
-                  accept={uploadType === 'photo' ? 'image/*' : 'video/*'}
-                  onChange={handleFileSelect}
-                  className="sr-only"
-                  disabled={sourceMode !== 'library' || !!preview}
-                />
-
-                {/* Outer zone — library mode uses htmlFor so the whole area acts as a label */}
-                <div
-                  onDrop={handleDrop}
-                  onDragOver={(e) => e.preventDefault()}
-                  className={`w-full rounded-xl border-2 border-dashed transition-colors overflow-hidden select-none block ${
-                    preview
-                      ? 'border-gold/30'
-                      : sourceMode === 'camera'
-                      ? 'border-gold/30 bg-black'
-                      : 'border-gold/40 bg-blush/30'
-                  }`}
-                  style={{
-                    aspectRatio: '4/3',
-                    WebkitUserSelect: 'none',
-                    userSelect: 'none',
-                    WebkitTouchCallout: 'none',
-                  }}
-                >
-                  {preview ? (
-                    <div className="relative w-full h-full">
-                      {uploadType === 'photo' ? (
-                        <img src={preview} alt="Preview" className="w-full h-full object-cover rounded-xl" />
-                      ) : (
-                        <video 
-                          key={preview}
-                          src={preview} 
-                          className="w-full h-full object-cover rounded-xl" 
-                          controls 
-                          playsInline
-                          preload="auto"
-                        />
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }}
-                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-charcoal/60 flex items-center justify-center"
-                      >
-                        <X size={14} className="text-white" />
-                      </button>
-                    </div>
-                  ) : sourceMode === 'camera' ? (
-                    <div className="relative w-full h-full bg-black">
-                      <video
-                        ref={videoRef}
-                        autoPlay
+              <div
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+                className={`w-full rounded-xl border-2 border-dashed transition-colors overflow-hidden select-none relative ${
+                  preview
+                    ? 'border-gold/30'
+                    : sourceMode === 'camera'
+                    ? 'border-gold/30 bg-black'
+                    : 'border-gold/40 bg-blush/30'
+                }`}
+                style={{
+                  aspectRatio: '4/3',
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none',
+                  WebkitTouchCallout: 'none',
+                }}
+              >
+                {preview ? (
+                  /* Preview mode — show chosen file */
+                  <div className="relative w-full h-full">
+                    {uploadType === 'photo' ? (
+                      <img src={preview} alt="Preview" className="w-full h-full object-cover rounded-xl" />
+                    ) : (
+                      <video 
+                        key={preview}
+                        src={preview} 
+                        className="w-full h-full object-cover rounded-xl" 
+                        controls 
                         playsInline
-                        muted
-                        className="w-full h-full object-cover"
-                        style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
+                        preload="auto"
                       />
-                      
-                      {/* Camera Controls Overlay */}
-                      <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-6 z-20">
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }}
+                      className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full bg-charcoal/60 flex items-center justify-center"
+                    >
+                      <X size={14} className="text-white" />
+                    </button>
+                  </div>
+                ) : sourceMode === 'camera' ? (
+                  /* Camera mode */
+                  <div className="relative w-full h-full bg-black">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                      style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
+                    />
+                    <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-6 z-20">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); flipCamera(); }}
+                        className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20 flex items-center justify-center text-white active:scale-95"
+                      >
+                        <RefreshCw size={18} />
+                      </button>
+                      {uploadType === 'photo' ? (
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); flipCamera(); }}
-                          className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20 flex items-center justify-center text-white active:scale-95"
+                          onClick={(e) => { e.stopPropagation(); capturePhoto(); }}
+                          className="w-14 h-14 rounded-full border-4 border-white bg-gold/90 hover:bg-gold flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); isRecording ? stopRecording() : startRecording(); }}
+                          className={`w-14 h-14 rounded-full border-4 border-white flex items-center justify-center shadow-lg active:scale-90 transition-all ${
+                            isRecording ? 'bg-red-600 animate-pulse' : 'bg-red-500'
+                          }`}
                         >
-                          <RefreshCw size={18} />
+                          {isRecording ? <Square size={16} className="text-white fill-white" /> : <Video size={20} className="text-white fill-white" />}
                         </button>
-
-                        {uploadType === 'photo' ? (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); capturePhoto(); }}
-                            className="w-14 h-14 rounded-full border-4 border-white bg-gold/90 hover:bg-gold flex items-center justify-center shadow-lg active:scale-90 transition-transform"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); isRecording ? stopRecording() : startRecording(); }}
-                            className={`w-14 h-14 rounded-full border-4 border-white flex items-center justify-center shadow-lg active:scale-90 transition-all ${
-                              isRecording ? 'bg-red-600 animate-pulse' : 'bg-red-500'
-                            }`}
-                          >
-                            {isRecording ? <Square size={16} className="text-white fill-white" /> : <Video size={20} className="text-white fill-white" />}
-                          </button>
-                        )}
-
-                        <div className="w-10" /> {/* Spacer for visual centering */}
-                      </div>
-
-                      {isRecording && (
-                        <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 animate-pulse z-20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                          <span>REC</span>
-                        </div>
                       )}
+                      <div className="w-10" />
                     </div>
-                  ) : (
-                    /* Library mode: entire inner area is a native <label> linked to the input */
-                    <label
-                      htmlFor="file-upload-input"
-                      className="w-full h-full flex flex-col items-center justify-center text-center px-6 gap-1 cursor-pointer"
-                      style={{ WebkitTouchCallout: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
-                    >
-                      <UploadCloud size={36} className="text-gold mb-2" strokeWidth={1.5} />
-                      <p className="text-sm text-muted-warm font-medium">{t('tapToChoose')}</p>
-                      {uploadType === 'video' && (
-                        <>
-                          <p className="text-[11px] text-muted-warm/60">
-                            {language === 'tr' 
-                              ? `Yüklenen Video: ${myVideos.length} / ${maxVideos}`
-                              : `Videos Uploaded: ${myVideos.length} / ${maxVideos}`}
-                          </p>
-                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
-                            {language === 'tr'
-                              ? 'Maks Video Sınırı: 150MB & 2 Dakika'
-                              : 'Max Video Limit: 150MB & 2 Mins'}
-                          </p>
-                        </>
-                      )}
-                      {uploadType === 'photo' && (
-                        <>
-                          <p className="text-[11px] text-muted-warm/60">
-                            {language === 'tr' 
-                              ? `Yüklenen Fotoğraf: ${myPhotos.length} / ${maxPhotos}`
-                              : `Photos Uploaded: ${myPhotos.length} / ${maxPhotos}`}
-                          </p>
-                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
-                            {language === 'tr'
-                              ? 'Maks Fotoğraf Sınırı: 50MB'
-                              : 'Max Photo Limit: 50MB'}
-                          </p>
-                        </>
-                      )}
-                      {/* Native label acts as the button — no JS click needed */}
-                      <span className="mt-3 px-5 py-2.5 rounded-full gradient-gold text-white text-xs font-semibold shadow-elevated active:opacity-80 transition-all">
-                        {uploadType === 'photo'
-                          ? (language === 'tr' ? 'Fotoğraf Seç' : 'Choose Photo')
-                          : (language === 'tr' ? 'Video Seç' : 'Choose Video')
-                        }
-                      </span>
-                    </label>
-                  )}
-                </div>
-              </>
+                    {isRecording && (
+                      <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 animate-pulse z-20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                        <span>REC</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Library mode — transparent full-area input overlay on top of visual content */
+                  <div className="relative w-full h-full flex flex-col items-center justify-center text-center px-6 gap-1">
+                    {/* The input covers the ENTIRE zone — any tap directly hits it. No JS, no label tricks. */}
+                    <input
+                      key={`file-input-${uploadType}`}
+                      ref={fileInputRef}
+                      type="file"
+                      accept={uploadType === 'photo' ? 'image/*' : 'video/*'}
+                      onChange={handleFileSelect}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        fontSize: '0',
+                      }}
+                    />
+                    {/* Visual content sits behind the input overlay (z-0) */}
+                    <UploadCloud size={36} className="text-gold mb-2" strokeWidth={1.5} />
+                    <p className="text-sm text-muted-warm font-medium">
+                      {uploadType === 'photo'
+                        ? (language === 'tr' ? 'Fotoğraf seçmek için dokun' : 'Tap to choose a photo')
+                        : (language === 'tr' ? 'Video seçmek için dokun' : 'Tap to choose a video')}
+                    </p>
+                    {uploadType === 'video' && (
+                      <>
+                        <p className="text-[11px] text-muted-warm/60">
+                          {language === 'tr' 
+                            ? `Yüklenen Video: ${myVideos.length} / ${maxVideos}`
+                            : `Videos Uploaded: ${myVideos.length} / ${maxVideos}`}
+                        </p>
+                        <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
+                          {language === 'tr'
+                            ? 'Maks Video Sınırı: 150MB & 2 Dakika'
+                            : 'Max Video Limit: 150MB & 2 Mins'}
+                        </p>
+                      </>
+                    )}
+                    {uploadType === 'photo' && (
+                      <>
+                        <p className="text-[11px] text-muted-warm/60">
+                          {language === 'tr' 
+                            ? `Yüklenen Fotoğraf: ${myPhotos.length} / ${maxPhotos}`
+                            : `Photos Uploaded: ${myPhotos.length} / ${maxPhotos}`}
+                        </p>
+                        <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
+                          {language === 'tr'
+                            ? 'Maks Fotoğraf Sınırı: 50MB'
+                            : 'Max Photo Limit: 50MB'}
+                        </p>
+                      </>
+                    )}
+                    <span className="mt-3 px-5 py-2.5 rounded-full gradient-gold text-white text-xs font-semibold shadow-elevated">
+                      {uploadType === 'photo'
+                        ? (language === 'tr' ? 'Fotoğraf Seç' : 'Choose Photo')
+                        : (language === 'tr' ? 'Video Seç' : 'Choose Video')
+                      }
+                    </span>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Caption */}
