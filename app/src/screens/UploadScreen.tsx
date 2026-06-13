@@ -619,29 +619,27 @@ export default function UploadScreen() {
                 </div>
               </div>
             ) : (
-              <div
+              <label
+                htmlFor={sourceMode === 'library' && !preview ? 'file-upload-input' : undefined}
                 onDrop={handleDrop}
                 onDragOver={(e) => e.preventDefault()}
-                onClick={() => {
-                  if (sourceMode === 'library' && !preview) {
-                    fileInputRef.current?.click();
-                  }
-                }}
-                className={`w-full rounded-xl border-2 border-dashed transition-colors overflow-hidden ${
+                className={`w-full rounded-xl border-2 border-dashed transition-colors overflow-hidden select-none block ${
                   preview
                     ? 'border-gold/30'
                     : sourceMode === 'camera'
                     ? 'border-gold/30 bg-black'
-                    : 'border-gold/40 hover:border-gold/70 bg-blush/30 cursor-pointer'
+                    : 'border-gold/40 hover:border-gold/70 bg-blush/30 cursor-pointer active:bg-blush/40'
                 }`}
                 style={{ aspectRatio: '4/3' }}
               >
                 <input
+                  id="file-upload-input"
                   ref={fileInputRef}
                   type="file"
                   accept={uploadType === 'photo' ? 'image/*' : 'video/*'}
                   onChange={handleFileSelect}
                   className="hidden"
+                  disabled={sourceMode !== 'library' || !!preview}
                 />
                 {preview ? (
                   <div className="relative w-full h-full">
@@ -747,7 +745,7 @@ export default function UploadScreen() {
                     )}
                   </div>
                 )}
-              </div>
+              </label>
             )}
 
             {/* Caption */}
