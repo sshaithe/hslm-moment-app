@@ -17,15 +17,17 @@ async function main() {
   `);
   console.log(`Updated ${resUploads.rowCount} rows in uploads table.`);
 
-  // 2. Update weddings table (banner, couple_photo, upload_placeholder_image)
+  // 2. Update weddings table (banner, couple_photo, hero_photo, upload_placeholder_image)
   const resWeddings = await client.query(`
     UPDATE weddings
     SET 
       couple_photo = REPLACE(couple_photo, 'https://f003.backblazeb2.com/file/hslm-wedding-gallery', 'https://cdn.acelyamuhammet.xyz/file/hslm-wedding-gallery'),
+      hero_photo = REPLACE(hero_photo, 'https://f003.backblazeb2.com/file/hslm-wedding-gallery', 'https://cdn.acelyamuhammet.xyz/file/hslm-wedding-gallery'),
       gallery_banner = REPLACE(gallery_banner, 'https://f003.backblazeb2.com/file/hslm-wedding-gallery', 'https://cdn.acelyamuhammet.xyz/file/hslm-wedding-gallery'),
       upload_placeholder_image = REPLACE(upload_placeholder_image, 'https://f003.backblazeb2.com/file/hslm-wedding-gallery', 'https://cdn.acelyamuhammet.xyz/file/hslm-wedding-gallery')
     WHERE 
       couple_photo LIKE '%f003.backblazeb2.com%' OR 
+      hero_photo LIKE '%f003.backblazeb2.com%' OR 
       gallery_banner LIKE '%f003.backblazeb2.com%' OR 
       upload_placeholder_image LIKE '%f003.backblazeb2.com%'
   `);

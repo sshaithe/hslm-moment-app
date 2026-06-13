@@ -137,8 +137,8 @@ export default function GalleryScreen() {
 
       {/* Gallery Banner (admin-set) */}
       {wedding.gallery_banner && (
-        <div className="relative h-32 overflow-hidden">
-          <img src={getMediaUrl(wedding.gallery_banner) || undefined} alt="Gallery banner" className="w-full h-full object-cover" />
+        <div className="relative h-48 sm:h-64 md:h-72 overflow-hidden">
+          <img src={getMediaUrl(wedding.gallery_banner) || undefined} alt="Gallery banner" className="w-full h-full object-cover object-center" />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-ivory/80" />
         </div>
       )}
