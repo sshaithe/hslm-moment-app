@@ -334,11 +334,6 @@ export default function UploadScreen() {
     await validateAndSetFile(f);
   };
 
-  const triggerFileSelect = () => {
-    if (sourceMode === 'library' && !preview) {
-      fileInputRef.current?.click();
-    }
-  };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -660,6 +655,7 @@ export default function UploadScreen() {
               </div>
             ) : (
               <>
+                {/* Hidden file input — connected via htmlFor on labels below. NO programmatic .click() */}
                 <input
                   id="file-upload-input"
                   ref={fileInputRef}
@@ -669,24 +665,17 @@ export default function UploadScreen() {
                   className="sr-only"
                   disabled={sourceMode !== 'library' || !!preview}
                 />
+
+                {/* Outer zone — library mode uses htmlFor so the whole area acts as a label */}
                 <div
-                  onClick={triggerFileSelect}
                   onDrop={handleDrop}
                   onDragOver={(e) => e.preventDefault()}
-                  role={sourceMode === 'library' && !preview ? 'button' : undefined}
-                  tabIndex={sourceMode === 'library' && !preview ? 0 : undefined}
-                  onKeyDown={(e) => {
-                    if (sourceMode === 'library' && !preview && (e.key === 'Enter' || e.key === ' ')) {
-                      e.preventDefault();
-                      triggerFileSelect();
-                    }
-                  }}
                   className={`w-full rounded-xl border-2 border-dashed transition-colors overflow-hidden select-none block ${
                     preview
                       ? 'border-gold/30'
                       : sourceMode === 'camera'
                       ? 'border-gold/30 bg-black'
-                      : 'border-gold/40 hover:border-gold/70 bg-blush/30 cursor-pointer active:bg-blush/40'
+                      : 'border-gold/40 bg-blush/30'
                   }`}
                   style={{
                     aspectRatio: '4/3',
@@ -766,17 +755,22 @@ export default function UploadScreen() {
                       )}
                     </div>
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-center px-6 gap-1 select-none">
+                    /* Library mode: entire inner area is a native <label> linked to the input */
+                    <label
+                      htmlFor="file-upload-input"
+                      className="w-full h-full flex flex-col items-center justify-center text-center px-6 gap-1 cursor-pointer"
+                      style={{ WebkitTouchCallout: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+                    >
                       <UploadCloud size={36} className="text-gold mb-2" strokeWidth={1.5} />
-                      <p className="text-sm text-muted-warm font-medium select-none">{t('tapToChoose')}</p>
+                      <p className="text-sm text-muted-warm font-medium">{t('tapToChoose')}</p>
                       {uploadType === 'video' && (
                         <>
-                          <p className="text-[11px] text-muted-warm/60 select-none">
+                          <p className="text-[11px] text-muted-warm/60">
                             {language === 'tr' 
                               ? `Yüklenen Video: ${myVideos.length} / ${maxVideos}`
                               : `Videos Uploaded: ${myVideos.length} / ${maxVideos}`}
                           </p>
-                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15 select-none">
+                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
                             {language === 'tr'
                               ? 'Maks Video Sınırı: 150MB & 2 Dakika'
                               : 'Max Video Limit: 150MB & 2 Mins'}
@@ -785,34 +779,26 @@ export default function UploadScreen() {
                       )}
                       {uploadType === 'photo' && (
                         <>
-                          <p className="text-[11px] text-muted-warm/60 select-none">
+                          <p className="text-[11px] text-muted-warm/60">
                             {language === 'tr' 
                               ? `Yüklenen Fotoğraf: ${myPhotos.length} / ${maxPhotos}`
                               : `Photos Uploaded: ${myPhotos.length} / ${maxPhotos}`}
                           </p>
-                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15 select-none">
+                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
                             {language === 'tr'
                               ? 'Maks Fotoğraf Sınırı: 50MB'
                               : 'Max Photo Limit: 50MB'}
                           </p>
                         </>
                       )}
-
-                      {/* Native button to guarantee native user gesture click activation on iOS & Android */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          triggerFileSelect();
-                        }}
-                        className="mt-3 px-5 py-2.5 rounded-full gradient-gold text-white text-xs font-semibold shadow-elevated hover:opacity-90 active:scale-95 transition-all cursor-pointer"
-                      >
+                      {/* Native label acts as the button — no JS click needed */}
+                      <span className="mt-3 px-5 py-2.5 rounded-full gradient-gold text-white text-xs font-semibold shadow-elevated active:opacity-80 transition-all">
                         {uploadType === 'photo'
                           ? (language === 'tr' ? 'Fotoğraf Seç' : 'Choose Photo')
                           : (language === 'tr' ? 'Video Seç' : 'Choose Video')
                         }
-                      </button>
-                    </div>
+                      </span>
+                    </label>
                   )}
                 </div>
               </>
