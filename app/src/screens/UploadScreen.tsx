@@ -226,72 +226,106 @@ export default function UploadScreen() {
 
   // Centralized validator for file type, size, and duration
   const validateAndSetFile = async (f: File) => {
-    // 1. File Size Validation (20MB for photo, 150MB for video)
-    const maxSize = uploadType === 'photo' ? 20 * 1024 * 1024 : 150 * 1024 * 1024;
-    if (f.size > maxSize) {
-      const limitStr = uploadType === 'photo' ? '20MB' : '150MB';
+    try {
+      const fileType = f.type || '';
+      const fileName = (f.name || '').toLowerCase();
+      
+      // 1. File Size Validation (50MB for photo, 150MB for video)
+      const maxSize = uploadType === 'photo' ? 50 * 1024 * 1024 : 150 * 1024 * 1024;
+      if (f.size > maxSize) {
+        const limitStr = uploadType === 'photo' ? '50MB' : '150MB';
+        addToast(
+          language === 'tr'
+            ? `Lütfen ${limitStr}'tan küçük bir dosya seçin.`
+            : `Please choose a file smaller than ${limitStr}.`,
+          'error'
+        );
+        return;
+      }
+
+      // 2. MIME Type / Extension Validation
+      const isJpgExt = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg');
+      const isPngExt = fileName.endsWith('.png');
+      const isWebpExt = fileName.endsWith('.webp');
+      const isHeicExt = fileName.endsWith('.heic') || fileName.endsWith('.heif');
+      
+      const isMp4Ext = fileName.endsWith('.mp4');
+      const isMovExt = fileName.endsWith('.mov');
+      const isWebmExt = fileName.endsWith('.webm');
+
+      if (uploadType === 'photo') {
+        const allowedImageMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+        const isAllowedMime = allowedImageMimes.includes(fileType);
+        const isAllowedExt = isJpgExt || isPngExt || isWebpExt;
+        
+        if (isHeicExt || fileType === 'image/heic' || fileType === 'image/heif') {
+          addToast(
+            language === 'tr'
+              ? 'HEIC formatı tarayıcılarda desteklenmez. Lütfen fotoğrafı JPEG veya PNG olarak seçin.'
+              : 'HEIC format is not supported by browsers. Please choose a JPEG or PNG photo.',
+            'error'
+          );
+          return;
+        }
+
+        if (!isAllowedMime && !isAllowedExt) {
+          addToast(
+            language === 'tr'
+              ? 'Desteklenmeyen görsel türü. Sadece JPG, JPEG, PNG, WEBP desteklenir.'
+              : 'Unsupported image type. Only JPG, JPEG, PNG, WEBP are allowed.',
+            'error'
+          );
+          return;
+        }
+      } else if (uploadType === 'video') {
+        const allowedVideoMimes = ['video/mp4', 'video/quicktime', 'video/webm'];
+        const isAllowedMime = allowedVideoMimes.includes(fileType);
+        const isAllowedExt = isMp4Ext || isMovExt || isWebmExt;
+
+        if (!isAllowedMime && !isAllowedExt) {
+          addToast(
+            language === 'tr'
+              ? 'Desteklenmeyen video türü. Sadece MP4, MOV, WEBM desteklenir.'
+              : 'Unsupported video type. Only MP4, MOV, WEBM are allowed.',
+            'error'
+          );
+          return;
+        }
+
+        // 3. Video Duration Validation (under 2 minutes / 120s)
+        const duration = await checkVideoDuration(f);
+        if (duration > 120) {
+          addToast(
+            language === 'tr'
+              ? 'Lütfen 2 dakikadan kısa bir video seçin.'
+              : 'Please choose a video shorter than 2 minutes.',
+            'error'
+          );
+          return;
+        }
+      }
+
+      // Revoke previous preview URL to prevent memory leaks
+      if (preview && preview.startsWith('blob:')) {
+        URL.revokeObjectURL(preview);
+      }
+      
+      setFile(f);
+      const objectUrl = URL.createObjectURL(f);
+      setPreview(objectUrl);
+    } catch (err) {
+      console.error('Error in validateAndSetFile:', err);
       addToast(
         language === 'tr'
-          ? `Lütfen ${limitStr}'tan küçük bir dosya seçin.`
-          : `Please choose a file smaller than ${limitStr}.`,
+          ? 'Dosya işlenirken bir hata oluştu.'
+          : 'An error occurred while processing the file.',
         'error'
       );
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    // 2. MIME Type / Extension Validation
-    const isImage = f.type.startsWith('image/');
-    const isVideo = f.type.startsWith('video/');
-
-    if (uploadType === 'photo') {
-      const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-      if (!isImage || !allowedImageTypes.includes(f.type)) {
-        addToast(
-          language === 'tr'
-            ? 'Desteklenmeyen görsel türü. Sadece JPG, JPEG, PNG, WEBP desteklenir.'
-            : 'Unsupported image type. Only JPG, JPEG, PNG, WEBP are allowed.',
-          'error'
-        );
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
-      }
-    } else if (uploadType === 'video') {
-      const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
-      if (!isVideo || !allowedVideoTypes.includes(f.type)) {
-        addToast(
-          language === 'tr'
-            ? 'Desteklenmeyen video türü. Sadece MP4, MOV, WEBM desteklenir.'
-            : 'Unsupported video type. Only MP4, MOV, WEBM are allowed.',
-          'error'
-        );
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
-      }
-
-      // 3. Video Duration Validation (under 2 minutes / 120s)
-      const duration = await checkVideoDuration(f);
-      if (duration > 120) {
-        addToast(
-          language === 'tr'
-            ? 'Lütfen 2 dakikadan kısa bir video seçin.'
-            : 'Please choose a video shorter than 2 minutes.',
-          'error'
-        );
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
     }
-
-    // Revoke previous preview URL to prevent memory leaks
-    if (preview && preview.startsWith('blob:')) {
-      URL.revokeObjectURL(preview);
-    }
-    
-    setFile(f);
-    const objectUrl = URL.createObjectURL(f);
-    setPreview(objectUrl);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -632,7 +666,7 @@ export default function UploadScreen() {
                   type="file"
                   accept={uploadType === 'photo' ? 'image/*' : 'video/*'}
                   onChange={handleFileSelect}
-                  className="hidden"
+                  className="sr-only"
                   disabled={sourceMode !== 'library' || !!preview}
                 />
                 <div
