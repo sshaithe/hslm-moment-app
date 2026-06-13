@@ -300,6 +300,12 @@ export default function UploadScreen() {
     await validateAndSetFile(f);
   };
 
+  const triggerFileSelect = () => {
+    if (sourceMode === 'library' && !preview) {
+      fileInputRef.current?.click();
+    }
+  };
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files?.[0];
@@ -619,19 +625,7 @@ export default function UploadScreen() {
                 </div>
               </div>
             ) : (
-              <label
-                htmlFor={sourceMode === 'library' && !preview ? 'file-upload-input' : undefined}
-                onDrop={handleDrop}
-                onDragOver={(e) => e.preventDefault()}
-                className={`w-full rounded-xl border-2 border-dashed transition-colors overflow-hidden select-none block ${
-                  preview
-                    ? 'border-gold/30'
-                    : sourceMode === 'camera'
-                    ? 'border-gold/30 bg-black'
-                    : 'border-gold/40 hover:border-gold/70 bg-blush/30 cursor-pointer active:bg-blush/40'
-                }`}
-                style={{ aspectRatio: '4/3' }}
-              >
+              <>
                 <input
                   id="file-upload-input"
                   ref={fileInputRef}
@@ -641,111 +635,138 @@ export default function UploadScreen() {
                   className="hidden"
                   disabled={sourceMode !== 'library' || !!preview}
                 />
-                {preview ? (
-                  <div className="relative w-full h-full">
-                    {uploadType === 'photo' ? (
-                      <img src={preview} alt="Preview" className="w-full h-full object-cover rounded-xl" />
-                    ) : (
-                      <video 
-                        key={preview}
-                        src={preview} 
-                        className="w-full h-full object-cover rounded-xl" 
-                        controls 
-                        playsInline
-                        preload="auto"
-                      />
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }}
-                      className="absolute top-2 right-2 w-7 h-7 rounded-full bg-charcoal/60 flex items-center justify-center"
-                    >
-                      <X size={14} className="text-white" />
-                    </button>
-                  </div>
-                ) : sourceMode === 'camera' ? (
-                  <div className="relative w-full h-full bg-black">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                      style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
-                    />
-                    
-                    {/* Camera Controls Overlay */}
-                    <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-6 z-20">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); flipCamera(); }}
-                        className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20 flex items-center justify-center text-white active:scale-95"
-                      >
-                        <RefreshCw size={18} />
-                      </button>
-
+                <div
+                  onClick={triggerFileSelect}
+                  onDrop={handleDrop}
+                  onDragOver={(e) => e.preventDefault()}
+                  role={sourceMode === 'library' && !preview ? 'button' : undefined}
+                  tabIndex={sourceMode === 'library' && !preview ? 0 : undefined}
+                  onKeyDown={(e) => {
+                    if (sourceMode === 'library' && !preview && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      triggerFileSelect();
+                    }
+                  }}
+                  className={`w-full rounded-xl border-2 border-dashed transition-colors overflow-hidden select-none block ${
+                    preview
+                      ? 'border-gold/30'
+                      : sourceMode === 'camera'
+                      ? 'border-gold/30 bg-black'
+                      : 'border-gold/40 hover:border-gold/70 bg-blush/30 cursor-pointer active:bg-blush/40'
+                  }`}
+                  style={{
+                    aspectRatio: '4/3',
+                    WebkitUserSelect: 'none',
+                    userSelect: 'none',
+                    WebkitTouchCallout: 'none',
+                  }}
+                >
+                  {preview ? (
+                    <div className="relative w-full h-full">
                       {uploadType === 'photo' ? (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); capturePhoto(); }}
-                          className="w-14 h-14 rounded-full border-4 border-white bg-gold/90 hover:bg-gold flex items-center justify-center shadow-lg active:scale-90 transition-transform"
-                        />
+                        <img src={preview} alt="Preview" className="w-full h-full object-cover rounded-xl" />
                       ) : (
+                        <video 
+                          key={preview}
+                          src={preview} 
+                          className="w-full h-full object-cover rounded-xl" 
+                          controls 
+                          playsInline
+                          preload="auto"
+                        />
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }}
+                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-charcoal/60 flex items-center justify-center"
+                      >
+                        <X size={14} className="text-white" />
+                      </button>
+                    </div>
+                  ) : sourceMode === 'camera' ? (
+                    <div className="relative w-full h-full bg-black">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
+                        style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
+                      />
+                      
+                      {/* Camera Controls Overlay */}
+                      <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-6 z-20">
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); isRecording ? stopRecording() : startRecording(); }}
-                          className={`w-14 h-14 rounded-full border-4 border-white flex items-center justify-center shadow-lg active:scale-90 transition-all ${
-                            isRecording ? 'bg-red-600 animate-pulse' : 'bg-red-500'
-                          }`}
+                          onClick={(e) => { e.stopPropagation(); flipCamera(); }}
+                          className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20 flex items-center justify-center text-white active:scale-95"
                         >
-                          {isRecording ? <Square size={16} className="text-white fill-white" /> : <Video size={20} className="text-white fill-white" />}
+                          <RefreshCw size={18} />
                         </button>
-                      )}
 
-                      <div className="w-10" /> {/* Spacer for visual centering */}
-                    </div>
+                        {uploadType === 'photo' ? (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); capturePhoto(); }}
+                            className="w-14 h-14 rounded-full border-4 border-white bg-gold/90 hover:bg-gold flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); isRecording ? stopRecording() : startRecording(); }}
+                            className={`w-14 h-14 rounded-full border-4 border-white flex items-center justify-center shadow-lg active:scale-90 transition-all ${
+                              isRecording ? 'bg-red-600 animate-pulse' : 'bg-red-500'
+                            }`}
+                          >
+                            {isRecording ? <Square size={16} className="text-white fill-white" /> : <Video size={20} className="text-white fill-white" />}
+                          </button>
+                        )}
 
-                    {isRecording && (
-                      <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 animate-pulse z-20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                        <span>REC</span>
+                        <div className="w-10" /> {/* Spacer for visual centering */}
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-center px-6 gap-1">
-                    <UploadCloud size={36} className="text-gold mb-2" strokeWidth={1.5} />
-                    <p className="text-sm text-muted-warm font-medium">{t('tapToChoose')}</p>
-                    {uploadType === 'video' && (
-                      <>
-                        <p className="text-[11px] text-muted-warm/60">
-                          {language === 'tr' 
-                            ? `Yüklenen Video: ${myVideos.length} / ${maxVideos}`
-                            : `Videos Uploaded: ${myVideos.length} / ${maxVideos}`}
-                        </p>
-                        <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
-                          {language === 'tr'
-                            ? 'Maks Video Sınırı: 150MB & 2 Dakika'
-                            : 'Max Video Limit: 150MB & 2 Mins'}
-                        </p>
-                      </>
-                    )}
-                    {uploadType === 'photo' && (
-                      <>
-                        <p className="text-[11px] text-muted-warm/60">
-                          {language === 'tr' 
-                            ? `Yüklenen Fotoğraf: ${myPhotos.length} / ${maxPhotos}`
-                            : `Photos Uploaded: ${myPhotos.length} / ${maxPhotos}`}
-                        </p>
-                        <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15">
-                          {language === 'tr'
-                            ? 'Maks Fotoğraf Sınırı: 20MB'
-                            : 'Max Photo Limit: 20MB'}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                )}
-              </label>
+
+                      {isRecording && (
+                        <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 animate-pulse z-20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                          <span>REC</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-center px-6 gap-1 select-none pointer-events-none">
+                      <UploadCloud size={36} className="text-gold mb-2 pointer-events-none" strokeWidth={1.5} />
+                      <p className="text-sm text-muted-warm font-medium select-none pointer-events-none">{t('tapToChoose')}</p>
+                      {uploadType === 'video' && (
+                        <>
+                          <p className="text-[11px] text-muted-warm/60 select-none pointer-events-none">
+                            {language === 'tr' 
+                              ? `Yüklenen Video: ${myVideos.length} / ${maxVideos}`
+                              : `Videos Uploaded: ${myVideos.length} / ${maxVideos}`}
+                          </p>
+                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15 select-none pointer-events-none">
+                            {language === 'tr'
+                              ? 'Maks Video Sınırı: 150MB & 2 Dakika'
+                              : 'Max Video Limit: 150MB & 2 Mins'}
+                          </p>
+                        </>
+                      )}
+                      {uploadType === 'photo' && (
+                        <>
+                          <p className="text-[11px] text-muted-warm/60 select-none pointer-events-none">
+                            {language === 'tr' 
+                              ? `Yüklenen Fotoğraf: ${myPhotos.length} / ${maxPhotos}`
+                              : `Photos Uploaded: ${myPhotos.length} / ${maxPhotos}`}
+                          </p>
+                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15 select-none pointer-events-none">
+                            {language === 'tr'
+                              ? 'Maks Fotoğraf Sınırı: 20MB'
+                              : 'Max Photo Limit: 20MB'}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
 
             {/* Caption */}
