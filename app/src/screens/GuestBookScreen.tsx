@@ -992,13 +992,25 @@ export default function GuestBookScreen() {
               </p>
             </div>
           ) : (
-            <button
-              onClick={() => setShowComposer(true)}
-              className="w-full py-4 rounded-full gradient-gold text-white text-sm font-medium flex items-center justify-center gap-2 shadow-elevated hover:opacity-90 active:scale-[0.98] transition-all"
-            >
-              <PenLine size={18} />
-              {t('signGuestBook')}
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={() => setShowComposer(true)}
+                className="w-full py-4 rounded-full gradient-gold text-white text-sm font-medium flex items-center justify-center gap-2 shadow-elevated hover:opacity-90 active:scale-[0.98] transition-all"
+              >
+                <PenLine size={18} />
+                {t('signGuestBook')}
+              </button>
+              <div className="text-center">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gold/10 text-gold text-xs font-semibold border border-gold/20">
+                  <span>✍️</span>
+                  <span>
+                    {language === 'tr'
+                      ? `Kalan Defter Girişi: ${Math.max(0, limit - myGuestBookEntries)} / ${limit}`
+                      : `Remaining Guest Book Entries: ${Math.max(0, limit - myGuestBookEntries)} / ${limit}`}
+                  </span>
+                </span>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -1030,9 +1042,18 @@ export default function GuestBookScreen() {
           </div>
 
           <div className="px-5 py-4 space-y-5">
-            {isLimitReached && (
+            {isLimitReached ? (
               <div className="text-[11px] font-medium text-red-500 bg-red-50 border border-red-100 rounded-xl p-3 leading-relaxed text-center">
                 ⚠️ {t('guestBookLimitReached', { limit: String(limit) })}
+              </div>
+            ) : (
+              <div className="text-[11px] font-medium text-gold bg-gold/5 border border-gold/10 rounded-xl p-2.5 leading-relaxed text-center flex items-center justify-center gap-1.5 animate-fade-in">
+                <span>✍️</span>
+                <span>
+                  {language === 'tr'
+                    ? `Kalan Defter Giriş Sınırınız: ${limit - myGuestBookEntries} / ${limit}`
+                    : `Remaining Guest Book Entries: ${limit - myGuestBookEntries} / ${limit}`}
+                </span>
               </div>
             )}
             {/* Signature Section */}

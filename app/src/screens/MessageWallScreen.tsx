@@ -138,7 +138,7 @@ export default function MessageWallScreen() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3 px-5 mb-6">
+      <div className="flex gap-3 px-5 mb-3">
         <button
           onClick={() => {
             if (!guest && wedding.require_guest_name) {
@@ -161,12 +161,33 @@ export default function MessageWallScreen() {
         </button>
       </div>
 
+      {/* Remaining Message Limit Badge */}
+      <div className="px-5 mb-6 text-center">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gold/10 text-gold text-xs font-semibold border border-gold/20">
+          <span>✉️</span>
+          <span>
+            {language === 'tr'
+              ? `Kalan Mesaj Sınırınız: ${Math.max(0, limit - myMessagesCount)} / ${limit}`
+              : `Remaining Messages: ${Math.max(0, limit - myMessagesCount)} / ${limit}`}
+          </span>
+        </span>
+      </div>
+
       {/* Inline Composer */}
       {showComposer && (
         <div className="mx-5 mb-6 bg-white rounded-2xl p-4 shadow-card animate-slide-up">
-          {isLimitReached && (
+          {isLimitReached ? (
             <div className="text-[11px] font-medium text-red-500 bg-red-50 border border-red-100 rounded-xl p-3 mb-3 leading-relaxed text-center">
               ⚠️ {t('messagesLimitReached', { limit: String(limit) })}
+            </div>
+          ) : (
+            <div className="text-[11px] font-medium text-gold bg-gold/5 border border-gold/10 rounded-xl p-2.5 mb-3 leading-relaxed text-center flex items-center justify-center gap-1.5 animate-fade-in">
+              <span>✉️</span>
+              <span>
+                {language === 'tr'
+                  ? `Kalan mesaj hakkınız: ${limit - myMessagesCount} / ${limit}`
+                  : `Remaining messages: ${limit - myMessagesCount} / ${limit}`}
+              </span>
             </div>
           )}
           <textarea
