@@ -438,9 +438,25 @@ export default function UploadScreen() {
       {isUploading ? (
         <div className="flex-1 flex flex-col items-center justify-center px-6 animate-fade-in">
           <div className="w-full max-w-xs text-center">
-            <div className="w-20 h-20 rounded-full bg-blush flex items-center justify-center mx-auto mb-6 relative">
-              <UploadCloud size={32} className="text-gold animate-pulse" />
-              <div className="absolute inset-0 rounded-full border-2 border-gold/20 border-t-gold animate-spin" />
+            <div className="w-40 h-40 rounded-2xl overflow-hidden border-2 border-gold/30 shadow-elevated mx-auto mb-6 relative bg-charcoal/5">
+              {preview ? (
+                uploadType === 'photo' ? (
+                  <img src={preview} alt="Uploading" className="w-full h-full object-cover" />
+                ) : (
+                  <video src={preview} className="w-full h-full object-cover" muted playsInline />
+                )
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-blush">
+                  <UploadCloud size={32} className="text-gold animate-pulse" />
+                </div>
+              )}
+              {/* Spinning overlay loader inside/around it */}
+              <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-premium relative">
+                  <UploadCloud size={20} className="text-gold animate-pulse" />
+                  <div className="absolute -inset-1 rounded-full border-2 border-gold/20 border-t-gold animate-spin" />
+                </div>
+              </div>
             </div>
             
             <h3 className="font-heading text-xl text-charcoal mb-2">
