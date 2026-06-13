@@ -766,17 +766,17 @@ export default function UploadScreen() {
                       )}
                     </div>
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-center px-6 gap-1 select-none pointer-events-none">
-                      <UploadCloud size={36} className="text-gold mb-2 pointer-events-none" strokeWidth={1.5} />
-                      <p className="text-sm text-muted-warm font-medium select-none pointer-events-none">{t('tapToChoose')}</p>
+                    <div className="w-full h-full flex flex-col items-center justify-center text-center px-6 gap-1 select-none">
+                      <UploadCloud size={36} className="text-gold mb-2" strokeWidth={1.5} />
+                      <p className="text-sm text-muted-warm font-medium select-none">{t('tapToChoose')}</p>
                       {uploadType === 'video' && (
                         <>
-                          <p className="text-[11px] text-muted-warm/60 select-none pointer-events-none">
+                          <p className="text-[11px] text-muted-warm/60 select-none">
                             {language === 'tr' 
                               ? `Yüklenen Video: ${myVideos.length} / ${maxVideos}`
                               : `Videos Uploaded: ${myVideos.length} / ${maxVideos}`}
                           </p>
-                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15 select-none pointer-events-none">
+                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15 select-none">
                             {language === 'tr'
                               ? 'Maks Video Sınırı: 150MB & 2 Dakika'
                               : 'Max Video Limit: 150MB & 2 Mins'}
@@ -785,12 +785,12 @@ export default function UploadScreen() {
                       )}
                       {uploadType === 'photo' && (
                         <>
-                          <p className="text-[11px] text-muted-warm/60 select-none pointer-events-none">
+                          <p className="text-[11px] text-muted-warm/60 select-none">
                             {language === 'tr' 
                               ? `Yüklenen Fotoğraf: ${myPhotos.length} / ${maxPhotos}`
                               : `Photos Uploaded: ${myPhotos.length} / ${maxPhotos}`}
                           </p>
-                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15 select-none pointer-events-none">
+                          <p className="text-[10px] text-gold/75 mt-1 font-semibold bg-gold/5 px-2.5 py-0.5 rounded-full border border-gold/15 select-none">
                             {language === 'tr'
                               ? 'Maks Fotoğraf Sınırı: 50MB'
                               : 'Max Photo Limit: 50MB'}
@@ -805,7 +805,7 @@ export default function UploadScreen() {
                           e.stopPropagation();
                           triggerFileSelect();
                         }}
-                        className="mt-3 px-5 py-2.5 rounded-full gradient-gold text-white text-xs font-semibold shadow-elevated hover:opacity-90 active:scale-95 transition-all pointer-events-auto cursor-pointer"
+                        className="mt-3 px-5 py-2.5 rounded-full gradient-gold text-white text-xs font-semibold shadow-elevated hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                       >
                         {uploadType === 'photo'
                           ? (language === 'tr' ? 'Fotoğraf Seç' : 'Choose Photo')
