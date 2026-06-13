@@ -7,11 +7,13 @@ async function main() {
   await client.connect();
   console.log('Connected to local database.');
 
-  // 1. Update uploads table
+  // 1. Update uploads table (both public_url and thumbnail_url)
   const resUploads = await client.query(`
     UPDATE uploads 
-    SET public_url = REPLACE(public_url, 'https://f003.backblazeb2.com/file/hslm-wedding-gallery', 'https://cdn.acelyamuhammet.xyz/file/hslm-wedding-gallery')
-    WHERE public_url LIKE '%f003.backblazeb2.com%'
+    SET 
+      public_url = REPLACE(public_url, 'https://f003.backblazeb2.com/file/hslm-wedding-gallery', 'https://cdn.acelyamuhammet.xyz/file/hslm-wedding-gallery'),
+      thumbnail_url = REPLACE(thumbnail_url, 'https://f003.backblazeb2.com/file/hslm-wedding-gallery', 'https://cdn.acelyamuhammet.xyz/file/hslm-wedding-gallery')
+    WHERE public_url LIKE '%f003.backblazeb2.com%' OR thumbnail_url LIKE '%f003.backblazeb2.com%'
   `);
   console.log(`Updated ${resUploads.rowCount} rows in uploads table.`);
 
